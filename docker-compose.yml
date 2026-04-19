@@ -1,0 +1,2 @@
+# docker-compose — spins up frontend + backend together for local dev and demos.
+# Services: backend (FastAPI, port 8000), frontend (Vite, port 5173). Shared .env, bind mounts for hot reload.
