@@ -1,0 +1,2 @@
+// Custom React hooks directory — reusable async/stateful logic.
+// Planned: useResearch(topic), useExport(). Keep components dumb; put side-effects in hooks.

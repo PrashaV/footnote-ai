@@ -1,0 +1,53 @@
+# ─── test.yml ────────────────────────────────────────────────────────────────
+# Runs the Python test suite with coverage on every push to any branch.
+# Uploads coverage results to Codecov.
+#
+# CODECOV_TOKEN
+#   Where to get it: https://app.codecov.io → your repo → Settings → General
+#   Add it to GitHub: repo Settings → Secrets and variables → Actions → New secret
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Tests
+
+on:
+  push:
+    branches:
+      - "**"   # every branch
+  pull_request:
+
+jobs:
+  test:
+    name: pytest + coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run pytest with coverage
+        run: |
+          pytest backend/tests/ \
+            --cov=backend \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          # CODECOV_TOKEN — see header comment above for where to get this
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true

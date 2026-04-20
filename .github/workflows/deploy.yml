@@ -1,0 +1,75 @@
+# ─── deploy.yml ──────────────────────────────────────────────────────────────
+# Deploys the React frontend to Vercel on every push to main.
+# Requires the test.yml workflow to pass first (workflow_run dependency).
+#
+# VERCEL_TOKEN
+#   Where to get it: https://vercel.com/account/tokens → Create Token
+#   Add it to GitHub: repo Settings → Secrets and variables → Actions → New secret
+#
+# VERCEL_ORG_ID / VERCEL_PROJECT_ID
+#   Where to get them: run `vercel link` locally once; values appear in
+#   .vercel/project.json (ORG_ID = orgId, PROJECT_ID = projectId)
+#   Add both to GitHub Secrets (same path as VERCEL_TOKEN above).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy
+
+on:
+  workflow_run:
+    # Only run after the Tests workflow completes successfully
+    workflows: ["Tests"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Build & deploy to Vercel
+    runs-on: ubuntu-latest
+
+    # Guard: only proceed if the triggering Tests run actually passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build React app
+        working-directory: frontend
+        run: npm run build
+        # Produces frontend/dist/ — Vercel CLI picks this up automatically
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        working-directory: frontend
+        run: |
+          vercel pull --yes --environment=production \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          # VERCEL_ORG_ID — see header comment above for where to get this
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          # VERCEL_PROJECT_ID — see header comment above for where to get this
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel (production)
+        working-directory: frontend
+        run: |
+          vercel deploy --prebuilt --prod \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

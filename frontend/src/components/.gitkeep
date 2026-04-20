@@ -1,0 +1,2 @@
+# Components directory — one React + TypeScript component per feature panel.
+# Planned: KnowledgeGraph.tsx, PaperCard.tsx, ResearchGaps.tsx, SearchBar.tsx, ResultsPanel.tsx.
