@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
   "framework": null,
   "env": {
     "VITE_API_URL": "https://footnote-ai-production.up.railway.app"
