@@ -14,10 +14,12 @@ import type {
 // Axios instance
 // ---------------------------------------------------------------------------
 
-// `import.meta.env.VITE_API_URL` is injected at build time by Vite. When it is
-// missing (e.g. in a test environment), fall back to the local dev server so
-// nothing crashes on import — the request itself will still fail loudly.
-const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// `import.meta.env.VITE_API_URL` is injected at build time by Vite.
+// Falls back to the Railway production URL so the app works even if the
+// env var is missing from a Vercel deployment.
+const baseURL =
+  import.meta.env.VITE_API_URL ??
+  "https://footnote-ai-production.up.railway.app";
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,

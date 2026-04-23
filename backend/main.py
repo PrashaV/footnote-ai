@@ -40,7 +40,9 @@ logger = logging.getLogger("footnote")
 # ALLOWED_ORIGINS environment variable (comma-separated).
 _DEFAULT_ORIGINS = [
     "http://localhost:5173",
-    "https://footnote.vercel.app",  # placeholder — update when deployed
+    "http://localhost:3000",
+    "https://footnote-ai-app.vercel.app",  # production Vercel URL
+    "https://footnote.vercel.app",
 ]
 
 
@@ -48,7 +50,11 @@ def _resolve_allowed_origins() -> list[str]:
     env_value = os.getenv("ALLOWED_ORIGINS", "").strip()
     if not env_value:
         return _DEFAULT_ORIGINS
-    return [origin.strip() for origin in env_value.split(",") if origin.strip()]
+    origins = [o.strip() for o in env_value.split(",") if o.strip()]
+    # Always include the hardcoded defaults so a partial override doesn't
+    # accidentally lock out the production frontend.
+    combined = list(dict.fromkeys(_DEFAULT_ORIGINS + origins))
+    return combined
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +73,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_resolve_allowed_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app",  # all Vercel preview URLs
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],

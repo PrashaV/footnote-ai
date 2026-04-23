@@ -1,15 +1,11 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
-  "framework": "vite",
+  "framework": null,
   "env": {
-    "VITE_API_URL": "@api_url"
+    "VITE_API_URL": "https://footnote-ai-production.up.railway.app"
   },
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "$1"
-    },
     {
       "src": "/(.*)",
       "dest": "/index.html"
