@@ -4,8 +4,6 @@ Keeps the file thin: wiring only. Validation lives in `models/`, and the
 actual Anthropic call lives in `services/claude_service.py`.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 
@@ -13,9 +11,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from models.research import ResearchRequest, ResearchResponse
 from services.claude_service import get_research
@@ -79,11 +74,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rate limiter — keyed on client IP.
-_rate_limit = f"{os.getenv('RATE_LIMIT_PER_MINUTE', '10')}/minute"
-limiter = Limiter(key_func=get_remote_address, default_limits=[_rate_limit])
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +100,6 @@ async def health() -> dict[str, str]:
     tags=["research"],
     summary="Generate a source-backed research briefing for a topic.",
 )
-@limiter.limit(_rate_limit)
 async def research(request: Request, payload: ResearchRequest) -> ResearchResponse:
     """Generate a ResearchResponse for the requested topic and depth."""
     logger.info("research request: topic=%r depth=%s", payload.topic, payload.depth)
@@ -124,7 +113,6 @@ async def research(request: Request, payload: ResearchRequest) -> ResearchRespon
     summary="Export a ResearchResponse as a formatted Word document (.docx).",
     response_description="Binary .docx file attachment.",
 )
-@limiter.limit(_rate_limit)
 async def export_docx(request: Request, payload: ResearchResponse) -> Response:
     """Accept a ResearchResponse and return a formatted .docx file download."""
     logger.info("export request: topic=%r", payload.topic)
