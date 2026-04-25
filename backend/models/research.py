@@ -6,8 +6,6 @@ service so that responses can be validated on the way out and consumed
 type-safely on the way in.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Literal, Optional
 

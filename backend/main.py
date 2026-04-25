@@ -13,8 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from models.research import ResearchRequest, ResearchResponse
+from models.verify import IntegrityReport, VerifyRequest
 from services.claude_service import get_research
 from services.export_service import generate_docx
+from services.verify_service import run_verification
 
 # Load .env before anything reads os.environ.
 load_dotenv()
@@ -57,11 +59,13 @@ def _resolve_allowed_origins() -> list[str]:
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Footnote API",
-    version="1.0.0",
+    title="Footnote — Academic Integrity Engine",
+    version="2.0.0",
     description=(
-        "Footnote API v1.0.0 — AI-powered research intelligence. "
-        "POST /api/research to receive a structured, source-backed briefing."
+        "Footnote API v2.0.0 — AI that verifies your research before submission. "
+        "POST /api/research for a source-backed research briefing. "
+        "POST /api/verify to run a full Academic Integrity check on a draft "
+        "(citation verification, AI writing detection, plagiarism-risk analysis)."
     ),
 )
 
@@ -84,7 +88,33 @@ app.add_middleware(
 @app.get("/", tags=["meta"])
 async def root() -> dict[str, str]:
     """Liveness check and version banner."""
-    return {"service": "Footnote API", "version": app.version, "status": "ok"}
+    return {
+        "service": "Footnote — Academic Integrity Engine",
+        "version": app.version,
+        "status": "ok",
+    }
+
+
+@app.post(
+    "/api/verify",
+    response_model=IntegrityReport,
+    status_code=status.HTTP_200_OK,
+    tags=["integrity"],
+    summary="Run a full Academic Integrity check on a research draft.",
+)
+async def verify(request: Request, payload: VerifyRequest) -> IntegrityReport:
+    """Verify a research draft for citation integrity, AI writing patterns,
+    and plagiarism risk. Returns a structured IntegrityReport with scores,
+    warnings, flagged passages, and recommended fixes."""
+    logger.info(
+        "verify request: title=%r checks=[citations=%s, ai=%s, plagiarism=%s] words=%d",
+        payload.title,
+        payload.check_citations,
+        payload.check_ai_writing,
+        payload.check_plagiarism_risk,
+        len(payload.draft.split()),
+    )
+    return await run_verification(payload)
 
 
 @app.get("/health", tags=["meta"])

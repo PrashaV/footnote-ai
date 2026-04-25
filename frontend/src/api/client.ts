@@ -9,6 +9,7 @@ import type {
   ResearchRequest,
   ResearchResponse,
 } from "./types";
+import type { IntegrityReport, VerifyRequest } from "./verifyTypes";
 
 // ---------------------------------------------------------------------------
 // Axios instance
@@ -96,6 +97,23 @@ export async function exportDocxAPI(response: ResearchResponse): Promise<Blob> {
   try {
     const { data } = await apiClient.post<Blob>("/api/export", response, {
       responseType: "blob",
+    });
+    return data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+/**
+ * POST /api/verify — run Academic Integrity checks on a research draft.
+ *
+ * Returns a full IntegrityReport with scores, warnings, flagged passages,
+ * and recommended fixes. Throws `ApiError` on failure.
+ */
+export async function verifyAPI(request: VerifyRequest): Promise<IntegrityReport> {
+  try {
+    const { data } = await apiClient.post<IntegrityReport>("/api/verify", request, {
+      timeout: 120_000, // verification can be slow (multiple concurrent LLM calls)
     });
     return data;
   } catch (err) {
