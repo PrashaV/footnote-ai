@@ -298,16 +298,17 @@ async def get_research(
     # 1. Fetch real papers (non-fatal if Scholar is unavailable)
     # ------------------------------------------------------------------
     scholar_papers: list[Paper] = []
-    try:
+   try:
         scholar_papers = await search_papers(topic)
     except HTTPException as exc:
-        # Pass 429 through so callers can back off; swallow everything else.
-        if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
-            raise
         logger.warning(
             "Scholar fetch failed (HTTP %d), falling back to Claude-only mode: %s",
             exc.status_code,
             exc.detail,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Unexpected Scholar error, falling back to Claude-only mode: %s", exc
         )
     except Exception as exc:
         logger.warning(
