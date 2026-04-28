@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Footnote — Testing & Integration Plan</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8f9fb;
+      color: #1e293b;
+      line-height: 1.65;
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
+      color: white;
+      padding: 48px 64px 40px;
+    }
+    .page-header .label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.75;
+      margin-bottom: 10px;
+    }
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      font-size: 15px;
+      opacity: 0.85;
+      max-width: 620px;
+    }
+    .meta-pills {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 32px 80px;
+    }
+
+    /* ── Section headers ── */
+    .section {
+      margin-bottom: 48px;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .section-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .icon-blue   { background: #eff6ff; }
+    .icon-purple { background: #f5f3ff; }
+    .icon-green  { background: #f0fdf4; }
+    .icon-amber  { background: #fffbeb; }
+    .icon-red    { background: #fef2f2; }
+    .icon-slate  { background: #f8fafc; }
+
+    .section-title h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .section-title .section-num {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    /* ── Steps ── */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px 22px;
+      position: relative;
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .step:hover {
+      border-color: #c7d2fe;
+      box-shadow: 0 2px 12px rgba(99,102,241,0.08);
+    }
+
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #4f46e5;
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step-num.green  { background: #16a34a; }
+    .step-num.amber  { background: #d97706; }
+    .step-num.red    { background: #dc2626; }
+    .step-num.slate  { background: #475569; }
+    .step-num.purple { background: #7c3aed; }
+
+    .step-body h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 5px;
+    }
+    .step-body p {
+      font-size: 14px;
+      color: #475569;
+      margin-bottom: 0;
+    }
+    .step-body p + p { margin-top: 6px; }
+
+    /* ── Code blocks ── */
+    .code-block {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      margin-top: 10px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .code-block .comment { color: #64748b; }
+    .code-block .key     { color: #93c5fd; }
+    .code-block .val     { color: #86efac; }
+    .code-block .cmd     { color: #fde68a; }
+
+    /* ── Tags ── */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .tag {
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      padding: 3px 9px;
+      border: 1px solid;
+    }
+    .tag-blue   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .tag-green  { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+    .tag-amber  { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+    .tag-red    { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .tag-purple { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+    .tag-slate  { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+
+    /* ── Alert boxes ── */
+    .alert {
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-top: 10px;
+      font-size: 13.5px;
+      border: 1px solid;
+    }
+    .alert-blue   { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+    .alert-amber  { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+    .alert-green  { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .alert-red    { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .alert strong { font-weight: 700; }
+
+    /* ── Comparison table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin-top: 12px;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    th {
+      background: #f1f5f9;
+      text-align: left;
+      padding: 11px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    td {
+      padding: 11px 16px;
+      color: #334155;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    .check { color: #16a34a; font-weight: 700; }
+    .cross { color: #dc2626; font-weight: 700; }
+    .dash  { color: #94a3b8; }
+
+    /* ── Sub-list ── */
+    .sub-list {
+      margin-top: 8px;
+      padding-left: 18px;
+    }
+    .sub-list li {
+      font-size: 13.5px;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="label">Footnote — Academic Integrity Engine</div>
+  <h1>Testing &amp; Integration Plan</h1>
+  <p>Step-by-step guide to test claim-citation matching, verify AI detection with Sapling, and integrate Turnitin or iThenticate for real plagiarism checking.</p>
+  <div class="meta-pills">
+    <span class="pill">3 Feature Areas</span>
+    <span class="pill">FastAPI Backend</span>
+    <span class="pill">React + Vite Frontend</span>
+    <span class="pill">Sapling AI Detection</span>
+    <span class="pill">Turnitin / iThenticate</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 1: CLAIM-CITATION MATCHING                    -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-icon icon-blue">🔗</div>
+      <div>
+        <div class="section-num">Section 1 of 3</div>
+        <h2>Testing Claim-to-Citation Matching</h2>
+      </div>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Confirm the backend server is running</h3>
+          <p>In your terminal, activate the venv and start the FastAPI server. You should see Uvicorn running on port 8000.</p>
+          <div class="code-block"><span class="comment"># Terminal 1 — backend</span>
+<span class="cmd">source ~/footnote-venv/bin/activate</span>
+<span class="cmd">cd "/Users/prashavelmurugan/Documents/Claude/Projects/Footnote: AI powered Research Intelligence/backend"</span>
+<span class="cmd">uvicorn main:app --reload --port 8000</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Prepare a test draft with real, verifiable citations</h3>
+          <p>The claim matcher only works when citations resolve to real papers with abstracts in Semantic Scholar. Use this known-good test draft — it contains a real paper that Semantic Scholar indexes.</p>
+          <div class="code-block"><span class="comment"># Example test draft (copy this into the app's text area)</span>
+Attention mechanisms have become a dominant approach in sequence modeling.
+Vaswani et al. (2017) showed that transformer models relying entirely on
+self-attention outperform recurrent architectures on machine translation tasks,
+achieving 28.4 BLEU on WMT 2014 English-to-German translation.
+The model eliminates recurrence entirely, allowing greater parallelization
+during training compared to RNN-based approaches.</div>
+          <div class="tags">
+            <span class="tag tag-blue">Real citation: Vaswani et al., 2017</span>
+            <span class="tag tag-green">Indexed in Semantic Scholar</span>
+            <span class="tag tag-green">Has a public abstract</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Submit and check the Citations tab first</h3>
+          <p>Before looking at Claim Accuracy, confirm the citation resolved. In the Citations tab, Vaswani et al. 2017 should show status <strong>"verified"</strong> and have a non-null abstract field. If it shows "unverified", the claim matcher cannot run — the abstract is missing.</p>
+          <div class="alert alert-amber">
+            <strong>If citation shows "unverified":</strong> Check that <code>SEMANTIC_SCHOLAR_API_KEY</code> is set in <code>backend/.env</code>. Unauthenticated requests are heavily rate-limited. A key lifts this significantly — get one free at semanticscholar.org/product/api.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Check the Claim Accuracy tab</h3>
+          <p>Click the <strong>"Claim Accuracy ✦"</strong> tab. You should see a verdict for the Vaswani et al. sentence. Expected result: <strong>Supported</strong> (the abstract does confirm transformers outperform RNNs on translation). If it shows "Unverifiable", the abstract was not returned by Semantic Scholar — retry or use a different paper.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h3>Test an overstated claim</h3>
+          <p>Now test a deliberately overstated version of the same claim to confirm the matcher catches misrepresentation.</p>
+          <div class="code-block"><span class="comment"># Overstated version — change "outperform" to "completely replace"</span>
+Vaswani et al. (2017) proved that transformer models have completely replaced
+all recurrent architectures in every NLP task, making LSTMs and GRUs obsolete.</div>
+          <p>Expected verdict: <strong>Overstated</strong> — the paper showed better translation BLEU scores but did not claim to replace all recurrent architectures in every NLP task.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <h3>Test a contradicted claim</h3>
+          <p>Test a claim that directly contradicts what the paper says.</p>
+          <div class="code-block"><span class="comment"># Contradicted version</span>
+Vaswani et al. (2017) demonstrated that recurrent neural networks are
+superior to attention-based models for machine translation tasks.</div>
+          <p>Expected verdict: <strong>Contradicted</strong> — the paper's conclusion is the exact opposite of this claim.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-body">
+          <h3>Test via the raw API (optional — for debugging)</h3>
+          <p>If the UI is not showing results, call the API directly to see the raw JSON and isolate whether the issue is backend or frontend.</p>
+          <div class="code-block"><span class="cmd">curl -X POST http://localhost:8000/api/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "draft": "Vaswani et al. (2017) showed transformers outperform RNNs on translation.",
+    "title": "Test",
+    "check_citations": true,
+    "check_claim_matching": true,
+    "check_ai_writing": false
+  }' | python3 -m json.tool | grep -A 20 "claim_match"</span></div>
+          <div class="alert alert-blue">
+            <strong>What to look for:</strong> <code>claim_match.total_checked</code> should be &gt; 0 and <code>claim_match.verdicts</code> should contain at least one entry. If <code>total_checked</code> is 0, the citation did not resolve with an abstract.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 2: AI DETECTION (SAPLING)                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-icon icon-purple">🤖</div>
+      <div>
+        <div class="section-num">Section 2 of 3</div>
+        <h2>Testing AI Writing Detection (Sapling)</h2>
+      </div>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num purple">1</div>
+        <div class="step-body">
+          <h3>Get your Sapling API key</h3>
+          <p>Go to <strong>sapling.ai/user/login</strong> → sign up → Dashboard → API Keys → create a persistent key (not the 24-hour trial key shown on first login). Copy the key.</p>
+          <div class="alert alert-green">
+            <strong>Free tier:</strong> No credit card required. Generous enough for testing. The key does not expire as long as you use the "create key" flow rather than the demo key.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num purple">2</div>
+        <div class="step-body">
+          <h3>Add the key to your .env file</h3>
+          <div class="code-block"><span class="cmd">echo 'SAPLING_API_KEY=your_key_here' >> \
+  "/Users/prashavelmurugan/Documents/Claude/Projects/Footnote: AI powered Research Intelligence/backend/.env"</span></div>
+          <p>Then restart the backend server (Ctrl+C, then run uvicorn again) so it picks up the new env var.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num purple">3</div>
+        <div class="step-body">
+          <h3>Test with known human-written text</h3>
+          <p>Use a passage you wrote yourself — something personal, conversational, with varied sentence length. Expected result: <strong>score &lt; 20%, verdict "Likely Human"</strong>.</p>
+          <div class="code-block"><span class="comment"># Good test: personal writing, conversational, varied rhythm</span>
+When I first started studying machine learning, I kept getting confused by
+the terminology. Every paper seemed to invent its own vocabulary. I remember
+reading about "latent representations" for weeks before realizing it just
+meant compressed features. The field has a habit of making simple ideas
+sound more complex than they are — sometimes on purpose, sometimes not.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num purple">4</div>
+        <div class="step-body">
+          <h3>Test with known AI-generated text</h3>
+          <p>Ask ChatGPT or Claude to write a paragraph on any academic topic, then paste it in. Expected result: <strong>score &gt; 65%, verdict "Likely AI"</strong> on clearly AI-generated text.</p>
+          <div class="alert alert-amber">
+            <strong>Important caveat:</strong> AI detectors have a false positive rate — some human writing scores high, especially formal academic prose. A high score is a flag to review, not proof. The disclaimer in your UI already covers this.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num purple">5</div>
+        <div class="step-body">
+          <h3>Test graceful degradation (no key)</h3>
+          <p>Temporarily remove the key from your .env and submit a draft. The AI Writing tab should show "AI detection unavailable — SAPLING_API_KEY not configured" rather than crashing. Restore the key afterward.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num purple">6</div>
+        <div class="step-body">
+          <h3>Verify flagged passages appear correctly</h3>
+          <p>Submit a mixed draft (half human, half AI). The AI Writing tab should show individual sentences scored high as flagged passages, with severity badges (high / medium / low). Confirm the sentence text matches your draft.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num purple">7</div>
+        <div class="step-body">
+          <h3>Test via raw API</h3>
+          <div class="code-block"><span class="cmd">curl -X POST http://localhost:8000/api/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "draft": "YOUR DRAFT TEXT HERE",
+    "check_citations": false,
+    "check_claim_matching": false,
+    "check_ai_writing": true
+  }' | python3 -m json.tool | grep -A 30 "ai_writing"</span></div>
+          <p>Check that <code>ai_writing.score</code> is a number 0–100, <code>verdict</code> is one of <code>likely_human / uncertain / likely_ai</code>, and <code>disclaimer</code> mentions Sapling.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 3: PLAGIARISM INTEGRATION                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-icon icon-red">📄</div>
+      <div>
+        <div class="section-num">Section 3 of 3</div>
+        <h2>Adding Real Plagiarism Detection (Turnitin / iThenticate)</h2>
+      </div>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num red">1</div>
+        <div class="step-body">
+          <h3>Understand what's available (and what's not)</h3>
+          <p>Real plagiarism detection requires matching submitted text against a massive document database. Only a few vendors have this. The main options for API integration are:</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>API Available</th>
+                <th>Best For</th>
+                <th>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Turnitin</strong></td>
+                <td><span class="check">✓</span> iThenticate API v2</td>
+                <td>Academic institutions, publishers</td>
+                <td>Enterprise pricing — contact sales</td>
+              </tr>
+              <tr>
+                <td><strong>Copyleaks</strong></td>
+                <td><span class="check">✓</span> REST API</td>
+                <td>Startups, developers, affordable</td>
+                <td>Pay-per-scan or monthly plans (~$10/mo)</td>
+              </tr>
+              <tr>
+                <td><strong>PlagiarismCheck.org</strong></td>
+                <td><span class="check">✓</span> REST API</td>
+                <td>SMBs, affordable</td>
+                <td>Credit-based</td>
+              </tr>
+              <tr>
+                <td><strong>Writer.com</strong></td>
+                <td><span class="cross">✗</span> No public API</td>
+                <td>Web use only</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="alert alert-blue">
+            <strong>Recommendation for Footnote:</strong> Start with <strong>Copyleaks</strong> — it has a proper REST API, developer-friendly docs, and affordable pricing that makes sense for an early-stage product. Turnitin requires institutional contracts.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">2</div>
+        <div class="step-body">
+          <h3>Sign up for Copyleaks API access</h3>
+          <p>Go to <strong>copyleaks.com/sign-up</strong> → create an account → go to <strong>API Access</strong> in your dashboard. You'll get an email and an API key. The free tier gives you a small number of scans per month to test with.</p>
+          <div class="tags">
+            <span class="tag tag-blue">API docs: api.copyleaks.com</span>
+            <span class="tag tag-green">Free trial scans available</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">3</div>
+        <div class="step-body">
+          <h3>Understand the Copyleaks API flow</h3>
+          <p>Copyleaks works asynchronously — you submit text, get a scan ID, then poll or receive a webhook when the scan completes. The flow is:</p>
+          <ul class="sub-list">
+            <li><strong>Step A:</strong> POST to <code>/v3/education/submit/file/{scanId}</code> with your text as a base64-encoded file</li>
+            <li><strong>Step B:</strong> Poll <code>/v3/education/{scanId}/status</code> until <code>status == 410</code> (completed)</li>
+            <li><strong>Step C:</strong> GET <code>/v3/education/{scanId}/result</code> for the full report with matched sources and similarity %</li>
+          </ul>
+          <div class="alert alert-amber">
+            <strong>This is not instant.</strong> Copyleaks scans take 30 seconds to several minutes. You'll need to handle this asynchronously — either with polling on the backend, or by returning a "scan pending" state to the frontend and letting the user refresh.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">4</div>
+        <div class="step-body">
+          <h3>Add Copyleaks credentials to .env</h3>
+          <div class="code-block"><span class="comment"># Add to backend/.env</span>
+<span class="key">COPYLEAKS_EMAIL</span>=<span class="val">your-copyleaks-account-email</span>
+<span class="key">COPYLEAKS_API_KEY</span>=<span class="val">your-copyleaks-api-key</span></div>
+          <p>Also add these to <code>backend/.env.example</code> (without values) so they're documented.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">5</div>
+        <div class="step-body">
+          <h3>Create backend/services/plagiarism_service.py (rewrite)</h3>
+          <p>Replace the current stub with a real Copyleaks integration. The service needs three things:</p>
+          <ul class="sub-list">
+            <li><strong>authenticate()</strong> — POST to <code>/v3/account/login/api</code> with email + key, returns a bearer token (valid 48 hrs, cache it)</li>
+            <li><strong>submit_scan(draft, scan_id)</strong> — submit the text for scanning</li>
+            <li><strong>get_result(scan_id)</strong> — poll until complete, return similarity score + matched sources</li>
+          </ul>
+          <p>Tell Claude: <em>"Write a plagiarism_service.py that integrates the Copyleaks API — authenticate, submit text scan, poll for result, return a PlagiarismResult with similarity_score (0–100), matched_sources list, and status."</em></p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">6</div>
+        <div class="step-body">
+          <h3>Update the data models</h3>
+          <p>Add a <code>PlagiarismResult</code> model to <code>backend/models/verify.py</code> and add <code>plagiarism: PlagiarismResult | None</code> to <code>IntegrityReport</code>. Mirror the TypeScript types in <code>frontend/src/api/verifyTypes.ts</code>.</p>
+          <div class="code-block"><span class="comment"># New Pydantic model to add to models/verify.py</span>
+<span class="key">class</span> PlagiarismMatchedSource(BaseModel):
+    url: Optional[str]
+    title: Optional[str]
+    similarity: float  <span class="comment"># 0.0–1.0</span>
+
+<span class="key">class</span> PlagiarismResult(BaseModel):
+    similarity_score: float  <span class="comment"># 0–100, overall</span>
+    matched_sources: list[PlagiarismMatchedSource]
+    scan_id: str
+    status: Literal["completed", "pending", "failed"]
+    disclaimer: str</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">7</div>
+        <div class="step-body">
+          <h3>Wire it into verify_service.py</h3>
+          <p>Add Copyleaks as a 4th parallel task in <code>run_verification()</code>. Because it's async, run it alongside AI detection and unsupported claims. Update <code>_compute_scores()</code> to include a plagiarism dimension in the overall score (suggested weight: 10–15%, reducing other weights slightly).</p>
+          <div class="alert alert-amber">
+            <strong>Handle timeouts gracefully.</strong> Copyleaks can take 2–3 minutes. Set a generous timeout (120s) but let the scan fail gracefully — the rest of the report should still return without it. Show "Plagiarism scan timed out — try again" in the UI rather than blocking the whole report.
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">8</div>
+        <div class="step-body">
+          <h3>Build a PlagiarismPanel frontend component</h3>
+          <p>Create <code>frontend/src/components/integrity/PlagiarismPanel.tsx</code> (replacing the current stub). It should show:</p>
+          <ul class="sub-list">
+            <li>A similarity score gauge (lower = better for the user)</li>
+            <li>A list of matched sources with URLs and similarity percentages</li>
+            <li>A disclaimer that this is powered by Copyleaks and what it checks</li>
+          </ul>
+          <p>Add a <strong>"Plagiarism"</strong> tab to <code>IntegrityDashboard.tsx</code> that renders this panel when <code>report.plagiarism</code> is non-null.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">9</div>
+        <div class="step-body">
+          <h3>Add an honest disclaimer in the UI</h3>
+          <p>Even with Copyleaks, be transparent about what it checks. Add a note like:</p>
+          <div class="alert alert-blue">
+            "Plagiarism check powered by Copyleaks — matches against web pages, published papers, and student submissions in their database. Results reflect similarity, not intent. A high similarity score may reflect legitimate quotation or common phrases. Always review matched sources in context."
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num red">10</div>
+        <div class="step-body">
+          <h3>Test end-to-end with a known-plagiarized draft</h3>
+          <p>Submit a draft containing a few sentences copied verbatim from a public Wikipedia article (e.g., the opening paragraph of "Attention (machine learning)" on Wikipedia). Expected result: Copyleaks should flag that passage with a similarity match pointing to the Wikipedia URL.</p>
+          <div class="tags">
+            <span class="tag tag-amber">Test type: known positive</span>
+            <span class="tag tag-green">Expected: similarity &gt; 30%</span>
+            <span class="tag tag-blue">Expected source: en.wikipedia.org</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SUMMARY TABLE                                         -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-title">
+      <div class="section-icon icon-slate">✅</div>
+      <div>
+        <div class="section-num">Summary</div>
+        <h2>What Each Feature Checks — Honest Overview</h2>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Powered By</th>
+          <th>What It Actually Checks</th>
+          <th>Limitations</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Citation Verification</strong></td>
+          <td>Semantic Scholar, CrossRef, OpenAlex</td>
+          <td>Whether cited papers exist in real scholarly databases</td>
+          <td>Cannot verify papers not indexed in these three databases</td>
+        </tr>
+        <tr>
+          <td><strong>Claim Accuracy ✦</strong></td>
+          <td>Claude + Semantic Scholar abstracts</td>
+          <td>Whether draft claims match what cited papers actually say</td>
+          <td>Only works when citations resolve with an abstract</td>
+        </tr>
+        <tr>
+          <td><strong>AI Writing Detection</strong></td>
+          <td>Sapling AI Detector</td>
+          <td>Statistical probability text was AI-generated</td>
+          <td>False positives on formal prose; not proof of AI authorship</td>
+        </tr>
+        <tr>
+          <td><strong>Plagiarism Check</strong></td>
+          <td>Copyleaks (to be integrated)</td>
+          <td>Text similarity against web, papers, student submissions</td>
+          <td>Similarity ≠ plagiarism; common phrases may flag; async (slow)</td>
+        </tr>
+        <tr>
+          <td><strong>Unsupported Claims</strong></td>
+          <td>Claude (editorial assist)</td>
+          <td>Factual statements that likely need a citation but don't have one</td>
+          <td>AI suggestion only — requires human review in context</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Footnote — Academic Integrity Engine &nbsp;·&nbsp; Internal development plan &nbsp;·&nbsp; April 2026
+  </div>
+
+</div>
+</body>
+</html>
