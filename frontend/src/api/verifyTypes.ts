@@ -1,4 +1,4 @@
-// TypeScript types that mirror backend/models/verify.py (Pydantic v2 schemas).
+// TypeScript types mirroring backend/models/verify.py (Pydantic v2).
 // Keep in sync with any changes to the Python models.
 
 // ---------------------------------------------------------------------------
@@ -9,8 +9,8 @@ export interface VerifyRequest {
   draft: string;
   title?: string;
   check_citations?: boolean;
+  check_claim_matching?: boolean;
   check_ai_writing?: boolean;
-  check_plagiarism_risk?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,7 @@ export interface VerifiedCitation {
   found_title: string | null;
   found_doi: string | null;
   found_url: string | null;
+  found_abstract: string | null;
   source_api: SourceApi | null;
   mismatch_reason: string | null;
   confidence: "low" | "medium" | "high";
@@ -51,7 +52,32 @@ export interface CitationCheckResult {
 }
 
 // ---------------------------------------------------------------------------
-// AI writing detection
+// Claim-to-citation matching (unique feature)
+// ---------------------------------------------------------------------------
+
+export type ClaimVerdict = "supported" | "overstated" | "contradicted" | "unverifiable";
+
+export interface ClaimMatchVerdict {
+  claim_text: string;
+  reference_raw: string;
+  found_abstract: string | null;
+  verdict: ClaimVerdict;
+  explanation: string;
+  severity: "low" | "medium" | "high";
+}
+
+export interface ClaimMatchResult {
+  total_checked: number;
+  supported_count: number;
+  overstated_count: number;
+  contradicted_count: number;
+  unverifiable_count: number;
+  verdicts: ClaimMatchVerdict[];
+  score: number;
+}
+
+// ---------------------------------------------------------------------------
+// AI writing detection (GPTZero)
 // ---------------------------------------------------------------------------
 
 export type AIVerdict = "likely_human" | "uncertain" | "likely_ai";
@@ -73,21 +99,6 @@ export interface AIWritingResult {
 }
 
 // ---------------------------------------------------------------------------
-// Plagiarism risk
-// ---------------------------------------------------------------------------
-
-export type RiskLevel = "low" | "moderate" | "high";
-
-export interface PlagiarismRiskResult {
-  risk_score: number;
-  risk_level: RiskLevel;
-  flagged_passages: FlaggedPassage[];
-  issues: string[];
-  explanation: string;
-  disclaimer: string;
-}
-
-// ---------------------------------------------------------------------------
 // Unsupported claims
 // ---------------------------------------------------------------------------
 
@@ -103,16 +114,16 @@ export interface UnsupportedClaim {
 
 export interface IntegrityScores {
   citation_integrity: number;
+  claim_accuracy: number;
   ai_originality: number;
-  plagiarism_risk: number;
   overall: number;
 }
 
 export type FixPriority = "high" | "medium" | "low";
 export type FixCategory =
   | "citation"
+  | "claim_match"
   | "ai_writing"
-  | "plagiarism"
   | "unsupported_claim"
   | "general";
 
@@ -135,8 +146,8 @@ export interface IntegrityReport {
   title: string | null;
   scores: IntegrityScores;
   citation_check: CitationCheckResult | null;
+  claim_match: ClaimMatchResult | null;
   ai_writing: AIWritingResult | null;
-  plagiarism_risk: PlagiarismRiskResult | null;
   unsupported_claims: UnsupportedClaim[];
   warnings: string[];
   recommended_fixes: RecommendedFix[];

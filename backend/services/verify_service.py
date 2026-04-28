@@ -1,9 +1,14 @@
 """Verification orchestration service.
 
-Coordinates the three analysis phases (citation check, AI writing detection,
-plagiarism-risk analysis) and assembles the final IntegrityReport.
+Runs three grounded integrity checks concurrently:
+  1. Citation verification   — real API lookups (Semantic Scholar, CrossRef, OpenAlex)
+  2. AI writing detection    — GPTZero trained classifier
+  3. Claim-to-citation match — Claude compares draft claims vs. paper abstracts (unique)
 
-Also uses Claude to identify unsupported claims in the draft.
+Also runs unsupported-claims detection via Claude as an editorial assist.
+
+Plagiarism string-matching is NOT included — we do not have a document
+database. Users are directed to Turnitin or Copyleaks for that.
 """
 
 from __future__ import annotations
@@ -15,10 +20,11 @@ import os
 import time
 from typing import Any
 
-from anthropic import AsyncAnthropic, AuthenticationError, RateLimitError, APITimeoutError, APIConnectionError, APIStatusError
+from anthropic import AsyncAnthropic
 from fastapi import HTTPException, status
 
 from models.verify import (
+    ClaimMatchResult,
     IntegrityReport,
     IntegrityReportMetadata,
     IntegrityScores,
@@ -28,35 +34,49 @@ from models.verify import (
 )
 from services.ai_detection_service import detect_ai_writing
 from services.citation_service import verify_citations
-from services.plagiarism_service import analyse_plagiarism_risk
+from services.claim_matcher_service import match_claims
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Unsupported-claims detection (Claude)
+# Unsupported-claims detection (Claude — editorial assist)
 # ---------------------------------------------------------------------------
 
-_CLAIMS_SYSTEM = """You are an academic integrity reviewer. Identify factual
-claims or assertions in the draft that lack an inline citation or attribution.
-Focus on claims that SHOULD be supported: statistics, specific findings,
-comparative statements, causal claims.
+_CLAIMS_SYSTEM = """You are a strict academic integrity reviewer. Your job is
+to find claims in academic text that NEED a citation but don't have one.
+Be CRITICAL — almost every factual statement in academic writing requires
+a source. Do not let anything slide.
 
-Return a SINGLE JSON array — no prose, no markdown — where each element is:
-{
-  "text": string,       // the unsupported claim (≤200 chars verbatim)
-  "reason": string,     // why it needs a citation
-  "suggestion": string  // what kind of source would support it
-}
+Return a SINGLE JSON array — no prose, no markdown:
+[{
+  "text": string,       // the unsupported claim verbatim (≤200 chars)
+  "reason": string,     // exactly why this needs a citation
+  "suggestion": string  // what type of source would support it
+}]
 
-Return at most 8 items. Return [] if the draft is well-cited.
+Flag AGGRESSIVELY:
+  • Any statistic or numerical claim without a source
+  • Any "studies show" or "research suggests" without citing which study
+  • Any field-specific definition not attributed to a source
+  • Background claims presented as established fact without attribution
+  • Any causal claim ("X causes Y", "X leads to Z")
+  • Comparative claims ("more effective than", "better than")
+  • Historical claims about when something was discovered
+
+For abstracts: flag ALL factual claims — abstracts routinely skip inline
+citations but still make claims that need backing.
+
+Return up to 8 items. Only return [] if literally every factual claim
+has an inline citation. Default assumption: claims need citations.
 Return ONLY the JSON array."""
 
 
 async def _find_unsupported_claims(draft: str) -> list[UnsupportedClaim]:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         return []
+
     timeout = float(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", "60"))
     client = AsyncAnthropic(api_key=api_key, timeout=timeout)
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
@@ -108,34 +128,34 @@ async def _find_unsupported_claims(draft: str) -> list[UnsupportedClaim]:
 
 
 # ---------------------------------------------------------------------------
-# Score aggregation helpers
+# Score aggregation
 # ---------------------------------------------------------------------------
 
 
 def _compute_scores(
     citation_score: float | None,
+    claim_score: float | None,
     ai_score: float | None,
-    plagiarism_risk_score: float | None,
 ) -> IntegrityScores:
     """Combine individual scores into IntegrityScores.
 
-    ai_originality  = 100 - ai_detection_score (higher = more human)
-    plagiarism_safe = 100 - plagiarism_risk_score (higher = safer)
+    ai_originality = 100 - ai_detection_score (higher = more human-written)
     citation_integrity = citation_score as-is
+    claim_accuracy = claim match score as-is
 
-    Overall weighted: 40% citation, 30% ai_originality, 30% plagiarism_safe
-    Missing dimensions default to 75 (neutral-positive).
+    Weighted overall: 40% citations, 35% claim accuracy, 25% AI originality.
+    Defaults when a check is skipped: 50 (unknown/neutral — never inflates score).
     """
-    c = citation_score if citation_score is not None else 75.0
-    ai_orig = (100.0 - ai_score) if ai_score is not None else 75.0
-    plag_safe = (100.0 - plagiarism_risk_score) if plagiarism_risk_score is not None else 75.0
+    c = citation_score if citation_score is not None else 50.0
+    cl = claim_score if claim_score is not None else 50.0
+    ai_orig = (100.0 - ai_score) if ai_score is not None else 50.0
 
-    overall = round(0.40 * c + 0.30 * ai_orig + 0.30 * plag_safe, 1)
+    overall = round(0.40 * c + 0.35 * cl + 0.25 * ai_orig, 1)
 
     return IntegrityScores(
         citation_integrity=round(c, 1),
+        claim_accuracy=round(cl, 1),
         ai_originality=round(ai_orig, 1),
-        plagiarism_risk=round(plag_safe, 1),
         overall=overall,
     )
 
@@ -145,47 +165,52 @@ def _build_warnings(report: IntegrityReport) -> list[str]:
 
     if report.citation_check:
         cc = report.citation_check
+        if cc.total_references == 0:
+            warnings.append(
+                "No references detected in this text. "
+                "Academic writing requires cited sources for factual claims."
+            )
         if cc.hallucinated_count > 0:
             warnings.append(
-                f"{cc.hallucinated_count} reference(s) appear to be hallucinated "
-                "(details don't match any real paper)."
+                f"{cc.hallucinated_count} reference(s) appear to be hallucinated — "
+                "details don't match any real paper found in scholarly databases."
             )
         if cc.unverified_count > 0:
             warnings.append(
-                f"{cc.unverified_count} reference(s) could not be verified in any "
-                "scholarly database."
+                f"{cc.unverified_count} reference(s) could not be verified in "
+                "Semantic Scholar, CrossRef, or OpenAlex."
             )
-        if cc.mismatch_count > 0:
+
+    if report.claim_match:
+        cm = report.claim_match
+        if cm.contradicted_count > 0:
             warnings.append(
-                f"{cc.mismatch_count} citation(s) found but the cited claim "
-                "may not match the paper's content."
+                f"{cm.contradicted_count} claim(s) appear to contradict what "
+                "the cited paper actually says — review these carefully."
+            )
+        if cm.overstated_count > 0:
+            warnings.append(
+                f"{cm.overstated_count} claim(s) appear to overstate the cited "
+                "paper's findings (e.g. stating causation when paper shows correlation)."
             )
 
-    if report.ai_writing and report.ai_writing.verdict == "likely_ai":
-        warnings.append(
-            "High likelihood of AI-generated text detected. "
-            "Review the flagged passages before submission."
-        )
-    elif report.ai_writing and report.ai_writing.verdict == "uncertain":
-        warnings.append(
-            "Some AI writing patterns detected. Results are inconclusive — "
-            "review flagged passages."
-        )
-
-    if report.plagiarism_risk and report.plagiarism_risk.risk_level == "high":
-        warnings.append(
-            "High plagiarism risk detected. Run a dedicated tool "
-            "(e.g. Turnitin) before submission."
-        )
-    elif report.plagiarism_risk and report.plagiarism_risk.risk_level == "moderate":
-        warnings.append(
-            "Moderate plagiarism risk indicators found. "
-            "Review the flagged passages for attribution."
-        )
+    if report.ai_writing:
+        if report.ai_writing.verdict == "likely_ai":
+            warnings.append(
+                f"GPTZero estimates {round(report.ai_writing.score)}% probability of "
+                "AI-generated text. Review flagged passages before submission."
+            )
+        elif report.ai_writing.verdict == "uncertain":
+            warnings.append(
+                f"GPTZero detected some AI writing patterns "
+                f"({round(report.ai_writing.score)}% AI probability). "
+                "Results are inconclusive — review flagged passages."
+            )
 
     if len(report.unsupported_claims) > 3:
         warnings.append(
-            f"{len(report.unsupported_claims)} claims may lack adequate citation support."
+            f"{len(report.unsupported_claims)} factual claims may lack citation support. "
+            "(AI-assisted suggestion — review in context.)"
         )
 
     return warnings
@@ -194,6 +219,7 @@ def _build_warnings(report: IntegrityReport) -> list[str]:
 def _build_fixes(report: IntegrityReport) -> list[RecommendedFix]:
     fixes: list[RecommendedFix] = []
 
+    # Citation fixes
     if report.citation_check:
         for c in report.citation_check.citations:
             if c.status == "hallucinated":
@@ -201,18 +227,8 @@ def _build_fixes(report: IntegrityReport) -> list[RecommendedFix]:
                     priority="high",
                     category="citation",
                     description=(
-                        f"Replace or verify reference: '{c.reference.raw_text[:100]}'. "
-                        f"The paper details don't match any real source."
-                    ),
-                    affected_text=c.reference.raw_text[:150],
-                ))
-            elif c.status == "mismatch":
-                fixes.append(RecommendedFix(
-                    priority="high",
-                    category="citation",
-                    description=(
-                        f"Citation mismatch: '{c.reference.raw_text[:100]}'. "
-                        f"{c.mismatch_reason or 'The cited claim may not match the paper.'}"
+                        f"Replace or verify: '{c.reference.raw_text[:100]}'. "
+                        "Details don't match any real paper in scholarly databases."
                     ),
                     affected_text=c.reference.raw_text[:150],
                 ))
@@ -221,32 +237,46 @@ def _build_fixes(report: IntegrityReport) -> list[RecommendedFix]:
                     priority="medium",
                     category="citation",
                     description=(
-                        f"Could not verify reference: '{c.reference.raw_text[:100]}'. "
-                        "Add a DOI or check for typos."
+                        f"Could not verify: '{c.reference.raw_text[:100]}'. "
+                        "Add a DOI or check for typos in the author name or year."
                     ),
                     affected_text=c.reference.raw_text[:150],
                 ))
 
-    if report.ai_writing:
-        for fp in report.ai_writing.flagged_passages:
-            if fp.severity in ("high", "medium"):
-                fixes.append(RecommendedFix(
-                    priority="medium" if fp.severity == "medium" else "high",
-                    category="ai_writing",
-                    description=f"AI writing pattern: {fp.reason}",
-                    affected_text=fp.text[:150],
-                ))
-
-    if report.plagiarism_risk:
-        for fp in report.plagiarism_risk.flagged_passages:
-            if fp.severity == "high":
+    # Claim-match fixes
+    if report.claim_match:
+        for v in report.claim_match.verdicts:
+            if v.verdict == "contradicted":
                 fixes.append(RecommendedFix(
                     priority="high",
-                    category="plagiarism",
-                    description=f"Plagiarism risk: {fp.reason}",
+                    category="claim_match",
+                    description=(
+                        f"Claim contradicts source: {v.explanation}"
+                    ),
+                    affected_text=v.claim_text[:150],
+                ))
+            elif v.verdict == "overstated":
+                fixes.append(RecommendedFix(
+                    priority="medium",
+                    category="claim_match",
+                    description=(
+                        f"Claim overstates source: {v.explanation}"
+                    ),
+                    affected_text=v.claim_text[:150],
+                ))
+
+    # AI writing fixes
+    if report.ai_writing:
+        for fp in report.ai_writing.flagged_passages:
+            if fp.severity == "high":
+                fixes.append(RecommendedFix(
+                    priority="medium",
+                    category="ai_writing",
+                    description=f"GPTZero flagged this passage as likely AI-generated: {fp.reason}",
                     affected_text=fp.text[:150],
                 ))
 
+    # Unsupported claims
     for claim in report.unsupported_claims:
         fixes.append(RecommendedFix(
             priority="medium",
@@ -255,19 +285,18 @@ def _build_fixes(report: IntegrityReport) -> list[RecommendedFix]:
             affected_text=claim.text[:150],
         ))
 
-    # Deduplicate and cap
+    # Deduplicate and sort
     seen: set[str] = set()
-    unique_fixes: list[RecommendedFix] = []
+    unique: list[RecommendedFix] = []
     for f in fixes:
         key = f.description[:80]
         if key not in seen:
             seen.add(key)
-            unique_fixes.append(f)
+            unique.append(f)
 
-    # Sort: high → medium → low
     order = {"high": 0, "medium": 1, "low": 2}
-    unique_fixes.sort(key=lambda f: order[f.priority])
-    return unique_fixes[:20]
+    unique.sort(key=lambda f: order[f.priority])
+    return unique[:20]
 
 
 # ---------------------------------------------------------------------------
@@ -276,38 +305,49 @@ def _build_fixes(report: IntegrityReport) -> list[RecommendedFix]:
 
 
 async def run_verification(request: VerifyRequest) -> IntegrityReport:
-    """Run all requested integrity checks and return an IntegrityReport.
+    """Run all integrity checks and return an IntegrityReport.
 
-    Checks run concurrently where possible to minimise total latency.
-    Non-fatal errors in individual checks are logged but don't abort the run.
+    Checks run concurrently to minimise total latency.
+    Individual check failures are isolated and don't abort the whole report.
 
     Raises:
-        HTTPException: on configuration errors (missing API key).
+        HTTPException: on rate-limit errors (pass-through to caller).
     """
     started = time.perf_counter()
     checks_performed: list[str] = []
 
     # ------------------------------------------------------------------
-    # Launch concurrent checks
+    # Step 1: Citation verification (always runs if requested)
     # ------------------------------------------------------------------
-    citation_task = (
-        asyncio.create_task(verify_citations(request.draft))
-        if request.check_citations
-        else None
-    )
+    citation_result = None
+    if request.check_citations:
+        try:
+            citation_result = await verify_citations(request.draft)
+            checks_performed.append("citation_verification")
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+                raise
+            logger.warning("verify_service: citation check failed: %s", exc.detail)
+        except Exception as exc:
+            logger.warning("verify_service: citation check failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Step 2: Claim matching (needs citation results for abstracts)
+    # runs after citation so it has access to found_abstract fields
+    # ------------------------------------------------------------------
+    claim_task = None
+    if request.check_claim_matching and citation_result:
+        claim_task = asyncio.create_task(match_claims(request.draft, citation_result))
+
+    # ------------------------------------------------------------------
+    # Step 3: AI writing detection + unsupported claims (parallel)
+    # ------------------------------------------------------------------
     ai_task = (
         asyncio.create_task(detect_ai_writing(request.draft))
-        if request.check_ai_writing
-        else None
-    )
-    plagiarism_task = (
-        asyncio.create_task(analyse_plagiarism_risk(request.draft))
-        if request.check_plagiarism_risk
-        else None
+        if request.check_ai_writing else None
     )
     claims_task = asyncio.create_task(_find_unsupported_claims(request.draft))
 
-    # Gather with individual error isolation
     async def safe(task, name: str):
         if task is None:
             return None
@@ -316,19 +356,17 @@ async def run_verification(request: VerifyRequest) -> IntegrityReport:
             checks_performed.append(name)
             return result
         except HTTPException as exc:
-            # Re-raise rate-limit errors; swallow others gracefully
             if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
                 raise
-            logger.warning("verify_service: %s check failed: %s", name, exc.detail)
+            logger.warning("verify_service: %s failed: %s", name, exc.detail)
             return None
         except Exception as exc:
-            logger.warning("verify_service: %s check failed: %s", name, exc)
+            logger.warning("verify_service: %s failed: %s", name, exc)
             return None
 
-    citation_result, ai_result, plagiarism_result, unsupported = await asyncio.gather(
-        safe(citation_task, "citation"),
-        safe(ai_task, "ai_writing"),
-        safe(plagiarism_task, "plagiarism_risk"),
+    claim_result, ai_result, unsupported = await asyncio.gather(
+        safe(claim_task, "claim_matching"),
+        safe(ai_task, "ai_writing_detection"),
         safe(claims_task, "unsupported_claims"),
     )
 
@@ -337,21 +375,20 @@ async def run_verification(request: VerifyRequest) -> IntegrityReport:
     # ------------------------------------------------------------------
     scores = _compute_scores(
         citation_score=citation_result.score if citation_result else None,
+        claim_score=claim_result.score if claim_result else None,
         ai_score=ai_result.score if ai_result else None,
-        plagiarism_risk_score=plagiarism_result.risk_score if plagiarism_result else None,
     )
 
-    word_count = len(request.draft.split())
-    latency_ms = int((time.perf_counter() - started) * 1000)
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    word_count = len(request.draft.split())
 
-    # Build partial report first so we can derive warnings + fixes from it
     partial = IntegrityReport(
         title=request.title,
         scores=scores,
         citation_check=citation_result,
+        claim_match=claim_result,
         ai_writing=ai_result,
-        plagiarism_risk=plagiarism_result,
         unsupported_claims=unsupported or [],
         warnings=[],
         recommended_fixes=[],
@@ -365,5 +402,4 @@ async def run_verification(request: VerifyRequest) -> IntegrityReport:
 
     partial.warnings = _build_warnings(partial)
     partial.recommended_fixes = _build_fixes(partial)
-
     return partial

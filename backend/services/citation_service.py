@@ -250,10 +250,15 @@ async def _lookup_semantic_scholar(
     client: httpx.AsyncClient,
     ref: ExtractedReference,
 ) -> dict[str, Any] | None:
-    """Try to find *ref* in Semantic Scholar."""
+    """Try to find *ref* in Semantic Scholar.
+
+    Requests abstract in addition to other fields so claim_matcher_service
+    can compare draft claims against actual paper content.
+    """
     api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
     headers = {"x-api-key": api_key} if api_key else {}
-    fields = "title,authors,year,externalIds,url"
+    # Include abstract so claim matching can use it
+    fields = "title,authors,year,externalIds,url,abstract"
 
     if ref.doi:
         try:
@@ -270,6 +275,7 @@ async def _lookup_semantic_scholar(
                     "title": data.get("title"),
                     "doi": (data.get("externalIds") or {}).get("DOI"),
                     "url": data.get("url"),
+                    "abstract": data.get("abstract"),
                 }
         except Exception:
             pass
@@ -293,6 +299,7 @@ async def _lookup_semantic_scholar(
             "title": hit.get("title"),
             "doi": (hit.get("externalIds") or {}).get("DOI"),
             "url": hit.get("url"),
+            "abstract": hit.get("abstract"),
         }
     except Exception as exc:
         logger.debug("scholar lookup failed: %s", exc)
@@ -347,6 +354,7 @@ async def _resolve_reference(
     found_title: str | None = hit.get("title")
     found_doi: str | None = hit.get("doi")
     found_url: str | None = hit.get("url")
+    found_abstract: str | None = hit.get("abstract")  # used by claim_matcher_service
 
     # Check if titles match
     if ref.title and not _titles_match(ref.title, found_title):
@@ -356,6 +364,7 @@ async def _resolve_reference(
             found_title=found_title,
             found_doi=found_doi,
             found_url=found_url,
+            found_abstract=found_abstract,
             source_api=source_api,
             mismatch_reason=(
                 f"Reference title '{ref.title}' does not match found title '{found_title}'."
@@ -369,6 +378,7 @@ async def _resolve_reference(
         found_title=found_title,
         found_doi=found_doi,
         found_url=found_url,
+        found_abstract=found_abstract,
         source_api=source_api,
         confidence="high",
     )
@@ -393,10 +403,13 @@ async def verify_citations(draft: str) -> CitationCheckResult:
     refs = await _extract_references(draft)
 
     if not refs:
+        # No references found — this is itself a red flag for academic writing.
+        # An abstract or draft with zero detectable citations scores 40 (not 100).
+        # A score of 100 would falsely imply perfect citation integrity.
         return CitationCheckResult(
             total_references=0,
             citations=[],
-            score=100.0,  # No references = no citation problems
+            score=40.0,  # No references detected — cannot verify citation integrity
         )
 
     sem = asyncio.Semaphore(_MAX_CONCURRENT_LOOKUPS)

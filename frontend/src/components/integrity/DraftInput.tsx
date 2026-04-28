@@ -15,8 +15,8 @@ const DraftInput: FC<Props> = ({ onSubmit, isLoading }) => {
   const [draft, setDraft] = useState("");
   const [title, setTitle] = useState("");
   const [checkCitations, setCheckCitations] = useState(true);
+  const [checkClaimMatching, setCheckClaimMatching] = useState(true);
   const [checkAI, setCheckAI] = useState(true);
-  const [checkPlagiarism, setCheckPlagiarism] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -64,8 +64,8 @@ const DraftInput: FC<Props> = ({ onSubmit, isLoading }) => {
       draft: trimmed,
       title: title.trim() || undefined,
       check_citations: checkCitations,
+      check_claim_matching: checkClaimMatching,
       check_ai_writing: checkAI,
-      check_plagiarism_risk: checkPlagiarism,
     });
   };
 
@@ -176,8 +176,8 @@ const DraftInput: FC<Props> = ({ onSubmit, isLoading }) => {
       <div className="mt-4 flex flex-wrap gap-3">
         {([
           { key: "citations", label: "Citation check", checked: checkCitations, set: setCheckCitations },
-          { key: "ai", label: "AI writing detection", checked: checkAI, set: setCheckAI },
-          { key: "plagiarism", label: "Plagiarism risk", checked: checkPlagiarism, set: setCheckPlagiarism },
+          { key: "claims", label: "Claim accuracy", checked: checkClaimMatching, set: setCheckClaimMatching },
+          { key: "ai", label: "AI writing (GPTZero)", checked: checkAI, set: setCheckAI },
         ] as const).map(({ key, label, checked, set }) => (
           <label
             key={key}

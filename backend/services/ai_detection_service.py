@@ -1,116 +1,115 @@
-"""AI writing pattern detection service.
+"""AI writing detection service — powered by GPTZero API.
 
-Uses Claude to analyse a draft for linguistic patterns associated with
-AI-generated text: low perplexity proxies (uniform sentence rhythm, limited
-vocabulary variation), excessive hedging, structural uniformity, and
-repetitive transitional phrasing.
+GPTZero is a purpose-built AI text classifier used by universities and
+publishers. It produces validated perplexity and burstiness scores from
+a trained classifier — not heuristic guessing.
 
-The module does NOT make any claims of certainty — it returns a probabilistic
-score (0–100) alongside detected indicators and a mandatory disclaimer.
+API docs: https://gptzero.me/api
+Free tier: 10,000 words/month
+Paid tiers available for higher volume.
+
+Set GPTZERO_API_KEY in your .env file.
+If the key is missing, the service returns a clearly labelled fallback
+result rather than crashing the whole verify pipeline.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-import time
-from typing import Any
 
-from anthropic import (
-    APIConnectionError,
-    APIStatusError,
-    APITimeoutError,
-    AsyncAnthropic,
-    AuthenticationError,
-    RateLimitError,
-)
+import httpx
 from fastapi import HTTPException, status
 
 from models.verify import AIWritingResult, FlaggedPassage
 
 logger = logging.getLogger(__name__)
 
+_GPTZERO_URL = "https://api.gptzero.me/v2/predict/text"
+_HTTP_TIMEOUT = 30.0  # GPTZero can be slow on longer texts
+
+
 # ---------------------------------------------------------------------------
-# Configuration
+# Response mapping
 # ---------------------------------------------------------------------------
 
-_SYSTEM_PROMPT = """You are an expert linguistic analyst specialising in
-detecting stylistic patterns associated with AI-generated academic text.
-
-Analyse the provided draft and return a SINGLE JSON object — no prose, no
-markdown fences — conforming exactly to this schema:
-
-{
-  "score": number,           // 0–100 (0 = almost certainly human, 100 = very likely AI)
-  "verdict": "likely_human" | "uncertain" | "likely_ai",
-  "indicators": [string],    // specific detected patterns, e.g. "uniform sentence length"
-  "flagged_passages": [
-    {
-      "text": string,        // verbatim excerpt ≤200 chars
-      "reason": string,      // why it was flagged
-      "severity": "low" | "medium" | "high"
-    }
-  ],
-  "explanation": string      // 2–4 sentence plain-language summary of your reasoning
-}
-
-Scoring guide:
-  0–30  : Likely human — varied rhythm, natural imperfections, authentic voice
-  31–60 : Uncertain — some AI patterns present but not conclusive
-  61–100: Likely AI — strong stylistic uniformity, low burstiness, hedging clusters
-
-Patterns to look for:
-  • Sentence length uniformity (burstiness < expected for human prose)
-  • Excessive modal hedging ("it is worth noting", "it is important to consider")
-  • Repetitive paragraph structure (every para starts with a topic sentence, ends with a summary)
-  • Generic transitional phrases ("furthermore", "in conclusion", "notably")
-  • Lack of personal anecdote, opinion, or authorial voice
-  • Overly balanced, list-like enumerations even in prose
-  • Absence of colloquialisms, contractions, or domain-specific slang
-  • Vocabulary richness lower than expected for the field
-
-Flag at most 5 passages. Keep flagged text to ≤200 characters.
-Return ONLY the JSON object."""
-
-
-def _build_prompt(draft: str) -> str:
-    # Truncate very long drafts — 8 000 words is plenty for pattern detection
-    words = draft.split()
-    if len(words) > 8000:
-        truncated = " ".join(words[:8000])
-        note = "\n\n[NOTE: Draft truncated to first 8 000 words for analysis.]"
+def _map_verdict(completely_generated_prob: float) -> str:
+    """Map GPTZero's completely_generated_prob to our verdict enum."""
+    if completely_generated_prob < 0.2:
+        return "likely_human"
+    elif completely_generated_prob < 0.65:
+        return "uncertain"
     else:
-        truncated = draft
-        note = ""
-    return f"Analyse the following research draft for AI writing patterns:{note}\n\n{truncated}"
+        return "likely_ai"
 
 
-def _parse_result(raw: str) -> dict[str, Any]:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:].lstrip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        logger.error("ai_detection_service: failed to parse JSON: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI detection returned malformed JSON: {exc.msg}",
-        ) from exc
+def _build_indicators(doc: dict) -> list[str]:
+    """Extract human-readable indicators from GPTZero document response."""
+    indicators: list[str] = []
 
+    avg_prob = doc.get("average_generated_prob", 0.0)
+    completely_prob = doc.get("completely_generated_prob", 0.0)
 
-def _get_client() -> AsyncAnthropic:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server misconfigured: ANTHROPIC_API_KEY is not set.",
+    if completely_prob > 0.65:
+        indicators.append(
+            f"GPTZero classifier: {round(completely_prob * 100)}% probability of being fully AI-generated"
         )
-    timeout = float(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", "60"))
-    return AsyncAnthropic(api_key=api_key, timeout=timeout)
+    elif completely_prob > 0.2:
+        indicators.append(
+            f"GPTZero classifier: {round(completely_prob * 100)}% probability of AI involvement"
+        )
+
+    if avg_prob > 0.5:
+        indicators.append(
+            f"High average sentence-level AI probability ({round(avg_prob * 100)}%)"
+        )
+
+    # Sentence-level signals
+    sentences = doc.get("sentences", []) or []
+    high_prob_sentences = [
+        s for s in sentences
+        if isinstance(s.get("generated_prob"), float) and s["generated_prob"] > 0.85
+    ]
+    if high_prob_sentences:
+        indicators.append(
+            f"{len(high_prob_sentences)} sentence(s) scored >85% AI-generated by GPTZero"
+        )
+
+    burstiness = doc.get("burstiness", None)
+    if burstiness is not None and burstiness < 0.3:
+        indicators.append(
+            f"Low burstiness score ({round(burstiness, 2)}) — sentences are unusually uniform in length and structure"
+        )
+
+    return indicators
+
+
+def _build_flagged_passages(doc: dict) -> list[FlaggedPassage]:
+    """Extract the highest-probability sentences as flagged passages."""
+    sentences = doc.get("sentences", []) or []
+
+    # Sort sentences by AI probability, take top 5
+    scored = [
+        s for s in sentences
+        if isinstance(s.get("generated_prob"), float) and s.get("sentence")
+    ]
+    scored.sort(key=lambda s: s["generated_prob"], reverse=True)
+    top = scored[:5]
+
+    passages: list[FlaggedPassage] = []
+    for s in top:
+        prob = s["generated_prob"]
+        if prob < 0.5:
+            continue  # Only flag sentences that GPTZero thinks are likely AI
+
+        text = s["sentence"][:200]
+        severity = "high" if prob > 0.85 else "medium" if prob > 0.65 else "low"
+        reason = (
+            f"GPTZero scores this sentence {round(prob * 100)}% likely AI-generated"
+        )
+        passages.append(FlaggedPassage(text=text, reason=reason, severity=severity))
+
+    return passages
 
 
 # ---------------------------------------------------------------------------
@@ -119,98 +118,157 @@ def _get_client() -> AsyncAnthropic:
 
 
 async def detect_ai_writing(draft: str) -> AIWritingResult:
-    """Analyse *draft* for AI writing patterns and return an AIWritingResult.
+    """Analyse *draft* using the GPTZero API and return an AIWritingResult.
 
-    Returns a probabilistic score with flagged passages and indicators.
-    Always includes a disclaimer about the limitations of AI detection.
+    GPTZero uses a trained classifier with perplexity and burstiness metrics
+    — not heuristic pattern matching. Results are more defensible than
+    Claude-based detection.
+
+    If GPTZERO_API_KEY is not set, returns a clearly labelled unavailable
+    result so the rest of the verify pipeline still runs.
 
     Raises:
-        HTTPException: on Anthropic API errors.
+        HTTPException: on API errors (timeout, auth failure, etc.)
     """
-    client = _get_client()
-    model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-    max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS", "2048"))
+    api_key = os.getenv("GPTZERO_API_KEY", "").strip()
 
-    prompt = _build_prompt(draft)
-    started = time.perf_counter()
+    # ------------------------------------------------------------------
+    # Graceful degradation if key not configured
+    # ------------------------------------------------------------------
+    if not api_key:
+        logger.warning(
+            "ai_detection_service: GPTZERO_API_KEY not set — skipping AI detection"
+        )
+        return AIWritingResult(
+            score=0.0,
+            verdict="likely_human",
+            flagged_passages=[],
+            indicators=["AI detection unavailable — GPTZERO_API_KEY not configured."],
+            explanation=(
+                "AI writing detection is not configured. "
+                "Add a GPTZERO_API_KEY to your environment variables to enable this feature. "
+                "Get a free key at gptzero.me."
+            ),
+            disclaimer=(
+                "AI detection was not performed. "
+                "Set GPTZERO_API_KEY to enable GPTZero-powered AI writing analysis."
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Truncate to GPTZero's recommended max (~5000 words)
+    # ------------------------------------------------------------------
+    words = draft.split()
+    if len(words) > 5000:
+        text_to_send = " ".join(words[:5000])
+        truncated = True
+    else:
+        text_to_send = draft
+        truncated = False
+
+    # ------------------------------------------------------------------
+    # Call GPTZero API
+    # ------------------------------------------------------------------
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "x-api-key": api_key,
+    }
+    payload = {
+        "document": text_to_send,
+        "multilingual": False,
+    }
 
     try:
-        message = await client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except AuthenticationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Upstream authentication with Anthropic failed.",
-        ) from exc
-    except RateLimitError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Upstream rate limit reached. Please retry shortly.",
-        ) from exc
-    except APITimeoutError as exc:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+            response = await client.post(_GPTZERO_URL, json=payload, headers=headers)
+    except httpx.TimeoutException as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Upstream request to Anthropic timed out.",
+            detail="GPTZero API timed out. Please try again.",
         ) from exc
-    except (APIConnectionError, APIStatusError) as exc:
+    except httpx.RequestError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not reach Anthropic API.",
+            detail="Could not reach GPTZero API.",
         ) from exc
 
-    logger.debug(
-        "ai_detection_service: Anthropic call took %dms",
-        int((time.perf_counter() - started) * 1000),
+    if response.status_code == 401:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GPTZero authentication failed — check your GPTZERO_API_KEY.",
+        )
+    if response.status_code == 429:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="GPTZero rate limit reached. Try again shortly or upgrade your plan.",
+        )
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"GPTZero API returned status {response.status_code}.",
+        )
+
+    try:
+        data = response.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GPTZero returned invalid JSON.",
+        ) from exc
+
+    # ------------------------------------------------------------------
+    # Parse GPTZero response
+    # ------------------------------------------------------------------
+    # GPTZero v2 response shape:
+    # { "documents": [{ "completely_generated_prob": float,
+    #                   "average_generated_prob": float,
+    #                   "burstiness": float,
+    #                   "sentences": [{ "sentence": str,
+    #                                   "generated_prob": float }] }] }
+    documents = data.get("documents") or []
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GPTZero returned an empty documents array.",
+        )
+
+    doc = documents[0]
+    completely_prob = float(doc.get("completely_generated_prob", 0.0))
+    avg_prob = float(doc.get("average_generated_prob", 0.0))
+
+    # Score: use completely_generated_prob as our 0–100 score
+    score = round(completely_prob * 100, 1)
+    verdict = _map_verdict(completely_prob)
+    indicators = _build_indicators(doc)
+    flagged_passages = _build_flagged_passages(doc)
+
+    burstiness = doc.get("burstiness")
+    burstiness_note = (
+        f" Burstiness score: {round(burstiness, 2)} (lower = more uniform, more AI-like)."
+        if burstiness is not None else ""
+    )
+    truncation_note = (
+        " Note: only the first 5,000 words were analysed."
+        if truncated else ""
     )
 
-    raw = "".join(
-        getattr(block, "text", "") for block in getattr(message, "content", []) or []
-    ).strip()
-
-    if not raw:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI detection returned an empty response.",
-        )
-
-    payload = _parse_result(raw)
-
-    # Normalise score
-    score = float(payload.get("score", 50))
-    score = max(0.0, min(100.0, score))
-
-    # Determine verdict from score if not supplied
-    raw_verdict = payload.get("verdict", "")
-    if raw_verdict in ("likely_human", "uncertain", "likely_ai"):
-        verdict = raw_verdict
-    else:
-        if score <= 30:
-            verdict = "likely_human"
-        elif score <= 60:
-            verdict = "uncertain"
-        else:
-            verdict = "likely_ai"
-
-    flagged_passages = [
-        FlaggedPassage(
-            text=fp.get("text", ""),
-            reason=fp.get("reason", ""),
-            severity=fp.get("severity", "medium")
-            if fp.get("severity") in ("low", "medium", "high")
-            else "medium",
-        )
-        for fp in (payload.get("flagged_passages") or [])[:5]
-        if fp.get("text")
-    ]
+    explanation = (
+        f"GPTZero estimates a {round(completely_prob * 100)}% probability this text is "
+        f"fully AI-generated, with an average sentence-level AI probability of "
+        f"{round(avg_prob * 100)}%.{burstiness_note}{truncation_note}"
+    )
 
     return AIWritingResult(
         score=score,
         verdict=verdict,
         flagged_passages=flagged_passages,
-        indicators=payload.get("indicators") or [],
-        explanation=payload.get("explanation") or "No explanation provided.",
+        indicators=indicators,
+        explanation=explanation,
+        disclaimer=(
+            "Powered by GPTZero — a trained AI text classifier used by universities "
+            "and publishers. Results reflect statistical patterns, not certainty. "
+            "A high score does not prove AI authorship; a low score does not guarantee "
+            "human authorship. Always review flagged passages in context."
+        ),
     )
