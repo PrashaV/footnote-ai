@@ -1,9 +1,11 @@
 {
-  "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist",
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
   "framework": null,
   "env": {
-    "VITE_API_URL": "https://footnote-ai-production.up.railway.app"
+    "VITE_API_URL": "https://footnote-ai-production.up.railway.app",
+    "VITE_SUPABASE_URL": "https://gzkukulvaovvehqcibct.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "sb_publishable_SAaQ-F2c7-AskO_BR3i2WA_6fNt8Qx_"
   },
   "routes": [
     {
