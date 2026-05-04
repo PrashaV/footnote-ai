@@ -8,6 +8,7 @@
 //   • User avatar / sign-in button in header
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FC } from "react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -24,6 +25,8 @@ import SessionHistory, { type SessionHistoryHandle } from "./components/SessionH
 import AuthModal from "./components/AuthModal";
 import DraftInput from "./components/integrity/DraftInput";
 import IntegrityDashboard from "./components/integrity/IntegrityDashboard";
+
+const WorkspacePage = lazy(() => import("./pages/WorkspacePage"));
 
 const KnowledgeGraph = lazy(() => import("./components/KnowledgeGraph"));
 import type { GraphNode, GraphLink } from "./components/KnowledgeGraph";
@@ -42,6 +45,7 @@ const AppShell: FC = () => {
   const { research, data, error, isLoading, isError } = useResearch();
   const { verify, data: integrityReport, error: verifyError, isLoading: isVerifying, isError: isVerifyError, reset: resetVerify } = useVerify();
   const { user, isLoading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<AppTab>("research");
   const [showAuth, setShowAuth] = useState(false);
@@ -168,6 +172,12 @@ const AppShell: FC = () => {
               }`}
             >
               ✓ Verify Draft
+            </button>
+            <button
+              onClick={() => navigate("/workspace")}
+              className="px-4 py-2 transition bg-white text-slate-600 hover:bg-slate-50 border-l border-slate-200"
+            >
+              ✏ Write
             </button>
           </div>
 
@@ -316,7 +326,7 @@ const AppShell: FC = () => {
 };
 
 // ---------------------------------------------------------------------------
-// Root — owns QueryClient + AuthProvider
+// Root — owns QueryClient + AuthProvider + Routes
 // ---------------------------------------------------------------------------
 
 const App: FC = () => {
@@ -324,7 +334,29 @@ const App: FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AppShell />
+        <Routes>
+          {/* Main research / verify shell */}
+          <Route path="/" element={<AppShell />} />
+
+          {/* Document workspace editor (Phase 3) */}
+          <Route
+            path="/workspace"
+            element={
+              <Suspense
+                fallback={
+                  <div className="flex min-h-screen items-center justify-center bg-slate-100">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                  </div>
+                }
+              >
+                <WorkspacePage />
+              </Suspense>
+            }
+          />
+
+          {/* Catch-all — redirect home */}
+          <Route path="*" element={<AppShell />} />
+        </Routes>
       </AuthProvider>
     </QueryClientProvider>
   );

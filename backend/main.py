@@ -8,15 +8,20 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
+from auth import get_current_user
+from db import get_supabase
 from models.research import ResearchRequest, ResearchResponse
 from models.verify import IntegrityReport, VerifyRequest
+from models.integrity_analyze import IntegrityAnalyzeRequest, IntegrityAnalyzeResponse
 from services.claude_service import get_research
 from services.export_service import generate_docx
 from services.verify_service import run_verification
+from services.citation_search_service import search_citations
+from services.integrity_analyze_service import analyze_integrity
 
 # Load .env before anything reads os.environ.
 load_dotenv()
@@ -102,12 +107,17 @@ async def root() -> dict[str, str]:
     tags=["integrity"],
     summary="Run a full Academic Integrity check on a research draft.",
 )
-async def verify(request: Request, payload: VerifyRequest) -> IntegrityReport:
+async def verify(
+    request: Request,
+    payload: VerifyRequest,
+    _user: dict = Depends(get_current_user),
+) -> IntegrityReport:
     """Verify a research draft for citation integrity, AI writing patterns,
     and plagiarism risk. Returns a structured IntegrityReport with scores,
     warnings, flagged passages, and recommended fixes."""
     logger.info(
-        "verify request: title=%r checks=[citations=%s, ai=%s, plagiarism=%s] words=%d",
+        "verify request: user=%s title=%r checks=[citations=%s, ai=%s, plagiarism=%s] words=%d",
+        _user.get("sub", "unknown"),
         payload.title,
         payload.check_citations,
         payload.check_ai_writing,
@@ -130,10 +140,62 @@ async def health() -> dict[str, str]:
     tags=["research"],
     summary="Generate a source-backed research briefing for a topic.",
 )
-async def research(request: Request, payload: ResearchRequest) -> ResearchResponse:
+async def research(
+    request: Request,
+    payload: ResearchRequest,
+    _user: dict = Depends(get_current_user),
+) -> ResearchResponse:
     """Generate a ResearchResponse for the requested topic and depth."""
-    logger.info("research request: topic=%r depth=%s", payload.topic, payload.depth)
+    logger.info(
+        "research request: user=%s topic=%r depth=%s",
+        _user.get("sub", "unknown"),
+        payload.topic,
+        payload.depth,
+    )
     return await get_research(topic=payload.topic, depth=payload.depth)
+
+
+@app.post(
+    "/api/citations/search",
+    status_code=status.HTTP_200_OK,
+    tags=["citations"],
+    summary="Search Semantic Scholar for papers matching a query string.",
+)
+async def citations_search(
+    request: Request,
+    _user: dict = Depends(get_current_user),
+) -> list[dict]:
+    """Proxy citation autocomplete queries to the Semantic Scholar API.
+
+    Accepts a JSON body ``{"query": "..."}`` and returns up to 5 paper
+    results with title, authors, year, doi, and externalIds.
+
+    Proxied through the backend to avoid browser CORS restrictions.
+    """
+    body = await request.json()
+    query: str = (body.get("query") or "").strip()
+
+    if not query:
+        return []
+
+    logger.info(
+        "citations search: user=%s query=%r",
+        _user.get("sub", "unknown"),
+        query[:60],
+    )
+
+    results = await search_citations(query)
+    return [
+        {
+            "paperId":     r.paper_id,
+            "title":       r.title,
+            "authors":     r.authors,
+            "year":        r.year,
+            "doi":         r.doi,
+            "externalIds": r.external_ids,
+        }
+        for r in results
+    ]
 
 
 @app.post(
@@ -143,9 +205,13 @@ async def research(request: Request, payload: ResearchRequest) -> ResearchRespon
     summary="Export a ResearchResponse as a formatted Word document (.docx).",
     response_description="Binary .docx file attachment.",
 )
-async def export_docx(request: Request, payload: ResearchResponse) -> Response:
+async def export_docx(
+    request: Request,
+    payload: ResearchResponse,
+    _user: dict = Depends(get_current_user),
+) -> Response:
     """Accept a ResearchResponse and return a formatted .docx file download."""
-    logger.info("export request: topic=%r", payload.topic)
+    logger.info("export request: user=%s topic=%r", _user.get("sub", "unknown"), payload.topic)
 
     doc_bytes = generate_docx(payload)
 
@@ -163,6 +229,105 @@ async def export_docx(request: Request, payload: ResearchResponse) -> Response:
             ".wordprocessingml.document"
         ),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Integrity analyze — Phase 4 endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/api/integrity/analyze",
+    response_model=IntegrityAnalyzeResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["integrity"],
+    summary="Run four integrity checks on a document in parallel.",
+)
+async def integrity_analyze(
+    payload: IntegrityAnalyzeRequest,
+    _user: dict = Depends(get_current_user),
+) -> IntegrityAnalyzeResponse:
+    """Run ai_detection, citation_check, plagiarism_check, and claim_match
+    concurrently for the given document.
+
+    Each check result is persisted to the ``integrity_results`` Supabase table
+    before the combined response is returned to the client.
+
+    Phase 4.1: all four engines are stubs returning placeholder results.
+    Subsequent phases (4.2–4.5) replace each stub with a real implementation.
+    """
+    user_id = _user.get("sub", "unknown")
+    word_count = len(payload.content.split())
+
+    logger.info(
+        "integrity/analyze: user=%s document_id=%s citations=%d words=%d",
+        user_id,
+        payload.document_id,
+        len(payload.citations),
+        word_count,
+    )
+
+    # Run all four checks in parallel.
+    ai_result, citation_result, plagiarism_result, claim_result = await analyze_integrity(
+        payload.content,
+        payload.citations,
+    )
+
+    # Persist each result to Supabase (best-effort — don't fail the request if this errors).
+    sb = get_supabase()
+    if sb:
+        rows = [
+            {
+                "document_id": payload.document_id,
+                "user_id": user_id,
+                "check_type": "ai_detection",
+                "result": ai_result.model_dump(),
+                "confidence_score": ai_result.confidence,
+                "flagged_sections": [fs.model_dump() for fs in ai_result.flagged_sections],
+            },
+            {
+                "document_id": payload.document_id,
+                "user_id": user_id,
+                "check_type": "citation",
+                "result": citation_result.model_dump(),
+                "confidence_score": citation_result.confidence,
+                "flagged_sections": [fs.model_dump() for fs in citation_result.flagged_sections],
+            },
+            {
+                "document_id": payload.document_id,
+                "user_id": user_id,
+                "check_type": "plagiarism",
+                "result": plagiarism_result.model_dump(),
+                "confidence_score": plagiarism_result.confidence,
+                "flagged_sections": [fs.model_dump() for fs in plagiarism_result.flagged_sections],
+            },
+            {
+                "document_id": payload.document_id,
+                "user_id": user_id,
+                "check_type": "claim_match",
+                "result": claim_result.model_dump(),
+                "confidence_score": claim_result.confidence,
+                "flagged_sections": [fs.model_dump() for fs in claim_result.flagged_sections],
+            },
+        ]
+        try:
+            sb.table("integrity_results").insert(rows).execute()
+            logger.info(
+                "integrity/analyze: saved 4 results to Supabase for document_id=%s",
+                payload.document_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "integrity/analyze: failed to persist results to Supabase: %s", exc
+            )
+
+    return IntegrityAnalyzeResponse(
+        document_id=payload.document_id,
+        ai_detection=ai_result,
+        citation_check=citation_result,
+        plagiarism_check=plagiarism_result,
+        claim_match=claim_result,
     )
 
 

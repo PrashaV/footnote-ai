@@ -59,11 +59,14 @@ export default defineConfig({
         // Manual chunk splitting: keep react-dom and d3 in their own vendor
         // chunks so browsers can cache them independently of app code.
         manualChunks(id) {
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/react-router-dom")) {
             return "vendor-react";
           }
           if (id.includes("node_modules/d3") || id.includes("node_modules/d3-")) {
             return "vendor-d3";
+          }
+          if (id.includes("node_modules/@tiptap") || id.includes("node_modules/prosemirror")) {
+            return "vendor-editor";
           }
         },
       },

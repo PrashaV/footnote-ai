@@ -13,3 +13,13 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* ── AI Writing Detection — flagged sentence highlights ──────────────────── */
+/* Applied via ProseMirror inline decorations from AIHighlightExtension.ts   */
+/* Inline styles on the decoration take precedence; this is a CSS fallback.  */
+[data-ai-flagged="true"] {
+  background-color: rgba(253, 224, 71, 0.38);      /* amber-300 / 38% */
+  border-bottom: 2px solid rgba(245, 158, 11, 0.55); /* amber-500 / 55% */
+  border-radius: 2px;
+  cursor: help;
+}
