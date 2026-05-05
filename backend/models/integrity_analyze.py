@@ -160,6 +160,58 @@ class PlagiarismMatch(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Claim match types (Phase 4.5)
+# ---------------------------------------------------------------------------
+
+
+class ClaimSourceRef(BaseModel):
+    """A source paper used as evidence for a claim match verdict."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = Field(..., description="Paper title.")
+    url: Optional[str] = Field(default=None, description="Link to the paper on Semantic Scholar.")
+    abstract_excerpt: Optional[str] = Field(
+        default=None, description="First 300 chars of the abstract used as evidence."
+    )
+    year: Optional[int] = Field(default=None, description="Publication year.")
+    authors: list[str] = Field(default_factory=list, description="Author names.")
+
+
+class ClaimMatch(BaseModel):
+    """A single claim extracted from the document and its NLI verdict.
+
+    verdict:
+        'entailed'     — at least one source supports the claim with confidence > 0.7
+        'contradicted' — at least one source contradicts the claim
+        'unsupported'  — no source could be found that entails or contradicts the claim
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    claim: str = Field(..., description="The extracted factual claim text.")
+    sentence: str = Field(..., description="The full sentence containing the claim.")
+    claim_type: str = Field(
+        ...,
+        description=(
+            "'statistic' | 'causal' | 'correlation' | 'definition' | 'quote' | 'general'"
+        ),
+    )
+    verdict: str = Field(
+        ...,
+        description="'entailed' | 'contradicted' | 'unsupported'",
+    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="NLI confidence (0–1).")
+    explanation: str = Field(..., description="Plain-English explanation of the verdict.")
+    supporting_sources: list[ClaimSourceRef] = Field(
+        default_factory=list,
+        description="Papers used as evidence (up to 3).",
+    )
+    char_start: int = Field(..., ge=0, description="Start char offset of the claim in the document.")
+    char_end: int = Field(..., ge=0, description="End char offset (exclusive) of the claim.")
+
+
 class CheckResult(BaseModel):
     """Normalised result from a single integrity check engine.
 
@@ -172,6 +224,7 @@ class CheckResult(BaseModel):
     method:             Optional engine/algorithm identifier (e.g. "perplexity+burstiness")
     flagged_citations:  Per-citation issues (citation check engine, Phase 4.3+)
     plagiarism_matches: Rich per-match data (plagiarism engine, Phase 4.4+)
+    claim_matches:      Per-claim NLI verdicts (claim match engine, Phase 4.5+)
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -192,6 +245,10 @@ class CheckResult(BaseModel):
     plagiarism_matches: list[PlagiarismMatch] = Field(
         default_factory=list,
         description="Rich per-match data from the plagiarism check engine (Phase 4.4+).",
+    )
+    claim_matches: list[ClaimMatch] = Field(
+        default_factory=list,
+        description="Per-claim NLI verdicts from the claim match engine (Phase 4.5+).",
     )
 
 

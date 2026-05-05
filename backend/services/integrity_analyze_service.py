@@ -4,7 +4,7 @@ Phase status:
   ✅ run_ai_detection     — Claude sentence scoring + burstiness (Phase 4.2)
   ✅ run_citation_check   — CrossRef + Semantic Scholar + DOAJ (Phase 4.3)
   ✅ run_plagiarism_check — embedding similarity + Semantic Scholar (Phase 4.4)
-  🔲 run_claim_match      — stub (Phase 4.5)
+  ✅ run_claim_match      — OpenAI NLI + Semantic Scholar (Phase 4.5)
 
 Public API
 ----------
@@ -104,25 +104,30 @@ async def run_plagiarism_check(
 async def run_claim_match(content: str, citations: list[CitationRef]) -> CheckResult:
     """Match in-text claims against the abstracts of their cited sources.
 
-    Phase 4.1 stub — returns a neutral placeholder.
-    Phase 4.5 will use Claude to compare each claim against the cited paper's
-    abstract and detect overstated, contradicted, or unsupported claims.
+    Phase 4.5 — fully implemented.
+
+    Pipeline (see claim_match_engine.py for details):
+      1. OpenAI extracts every verifiable factual claim with type + char offsets.
+      2. For each claim: search Semantic Scholar for 3 relevant papers; also
+         incorporate any existing citation abstracts nearby in the document.
+      3. OpenAI NLI classifies each (claim, evidence) pair as entailed /
+         contradicted / unsupported.
+      4. Aggregate: entailed ✓ if any source confidence > 0.7, contradicted ✗
+         if any source contradicts, otherwise unsupported ⚠.
+
+    Requires OPENAI_API_KEY environment variable. Returns a neutral stub result
+    (score=0.8, unflagged) when the key is absent so the other three checks
+    are unaffected.
     """
-    await asyncio.sleep(0)
+    from services.claim_match_engine import run_claim_match_engine  # local import
 
     logger.debug(
-        "run_claim_match: stub called (len=%d, citations=%d)",
+        "run_claim_match: calling claim_match_engine (len=%d, citations=%d)",
         len(content),
         len(citations),
     )
-
-    return CheckResult(
-        score=0.8,
-        flagged=False,
-        flagged_sections=[],
-        confidence=0.5,
-        summary="Claim-to-source matching engine not yet implemented — coming in Phase 4.5.",
-    )
+    result_dict = await run_claim_match_engine(content, citations)
+    return CheckResult(**result_dict)
 
 
 # ---------------------------------------------------------------------------

@@ -7,9 +7,10 @@
 // Phase 4.2: AI Detection card — green/yellow/red based on AI-likelihood.
 // Phase 4.4: Plagiarism card — expands to show PlagiarismPanel match list.
 
-import { type FC } from "react";
-import type { CheckResult, IntegrityAnalyzeResponse } from "../../api/integrityAnalyzeTypes";
+import { type FC, useState } from "react";
+import type { CheckResult, IntegrityAnalyzeResponse, ClaimMatch } from "../../api/integrityAnalyzeTypes";
 import { scoreToBadge, type IntegrityBadge } from "../../api/integrityAnalyzeTypes";
+import CitationFlagsPanel from "./CitationFlagsPanel";
 import PlagiarismPanel from "./PlagiarismPanel";
 
 // ---------------------------------------------------------------------------
@@ -101,17 +102,158 @@ const ENGINE_CONFIGS: EngineConfig[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Claim match breakdown (Phase 4.5)
+// ---------------------------------------------------------------------------
+
+const CLAIM_VERDICT_STYLES: Record<ClaimMatch["verdict"], {
+  dot: string;
+  badge: string;
+  icon: string;
+  label: string;
+}> = {
+  entailed:     { dot: "bg-green-500",  badge: "bg-green-50  text-green-700  border-green-200",  icon: "✓", label: "Supported" },
+  unsupported:  { dot: "bg-orange-400", badge: "bg-orange-50 text-orange-700 border-orange-200", icon: "⚠", label: "Unsupported" },
+  contradicted: { dot: "bg-red-500",    badge: "bg-red-50    text-red-700    border-red-200",    icon: "✗", label: "Contradicted" },
+};
+
+const ClaimRow: FC<{ claim: ClaimMatch }> = ({ claim }) => {
+  const [expanded, setExpanded] = useState(false);
+  const cfg = CLAIM_VERDICT_STYLES[claim.verdict];
+
+  return (
+    <div className="border-b border-slate-100 last:border-b-0">
+      {/* Collapsed header */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left px-4 py-2.5 flex items-start gap-2 hover:bg-slate-50 transition-colors"
+        aria-expanded={expanded}
+      >
+        <span className={`mt-0.5 flex-shrink-0 h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${cfg.dot}`}>
+          {cfg.icon}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-medium text-slate-700 line-clamp-2 leading-snug">
+            {claim.claim}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5 capitalize">{claim.claim_type}</p>
+        </div>
+        <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${cfg.badge}`}>
+          {cfg.label}
+        </span>
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="px-4 pb-3 space-y-2 bg-slate-50">
+          {/* Sentence */}
+          <div className="rounded-md border border-indigo-100 bg-indigo-50 px-2.5 py-1.5">
+            <p className="text-[10px] font-semibold text-indigo-500 mb-0.5">From document:</p>
+            <p className="text-[11px] text-slate-700 italic leading-snug">
+              "{claim.sentence.length > 200 ? claim.sentence.slice(0, 200) + "…" : claim.sentence}"
+            </p>
+          </div>
+
+          {/* Explanation */}
+          <p className="text-[11px] text-slate-600 leading-snug">{claim.explanation}</p>
+
+          {/* Supporting sources */}
+          {claim.supporting_sources.length > 0 && (
+            <div className="space-y-1">
+              {claim.supporting_sources.map((src, i) => (
+                <div key={i} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5">
+                  <p className="text-[10px] font-semibold text-slate-500">
+                    {src.url ? (
+                      <a
+                        href={src.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {src.title}
+                      </a>
+                    ) : src.title}
+                    {src.year ? ` (${src.year})` : ""}
+                  </p>
+                  {src.abstract_excerpt && claim.verdict !== "entailed" && (
+                    <p className="mt-0.5 text-[10px] text-slate-400 italic line-clamp-3">
+                      {src.abstract_excerpt}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Confidence */}
+          <p className="text-[10px] text-slate-400">
+            NLI confidence: {Math.round(claim.confidence * 100)}%
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface ClaimMatchBreakdownProps {
+  claims: ClaimMatch[];
+}
+
+const ClaimMatchBreakdown: FC<ClaimMatchBreakdownProps> = ({ claims }) => {
+  if (!claims.length) return null;
+
+  const entailed     = claims.filter((c) => c.verdict === "entailed").length;
+  const contradicted = claims.filter((c) => c.verdict === "contradicted").length;
+  const unsupported  = claims.filter((c) => c.verdict === "unsupported").length;
+
+  return (
+    <div className="-mx-4 mt-2 border-t border-slate-100">
+      {/* Summary chips */}
+      <div className="flex flex-wrap gap-1.5 px-4 py-2">
+        {entailed > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            {entailed} supported
+          </span>
+        )}
+        {unsupported > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+            {unsupported} unsupported
+          </span>
+        )}
+        {contradicted > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+            {contradicted} contradicted
+          </span>
+        )}
+      </div>
+      {/* Claim rows */}
+      <div>
+        {claims.map((claim, i) => (
+          <ClaimRow key={i} claim={claim} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Engine card
 // ---------------------------------------------------------------------------
 
 interface EngineCardProps {
   config: EngineConfig;
   result: CheckResult;
+  /** When true, renders CitationFlagsPanel below the standard card summary. */
+  showCitationFlags?: boolean;
   /** When true, renders PlagiarismPanel below the standard card summary. */
   showPlagiarismMatches?: boolean;
+  /** When true, renders ClaimMatchBreakdown below the standard card summary. */
+  showClaimMatches?: boolean;
 }
 
-const EngineCard: FC<EngineCardProps> = ({ config, result, showPlagiarismMatches }) => {
+const EngineCard: FC<EngineCardProps> = ({ config, result, showCitationFlags, showPlagiarismMatches, showClaimMatches }) => {
   const badge = config.invertedScore
     ? aiScoreToBadge(result.score)
     : scoreToBadge(result.score, result.flagged);
@@ -182,11 +324,23 @@ const EngineCard: FC<EngineCardProps> = ({ config, result, showPlagiarismMatches
         </p>
       )}
 
+      {/* Citation flags (Phase 4.3) — rendered inline below the card */}
+      {showCitationFlags && result.flagged_citations && result.flagged_citations.length > 0 && (
+        <div className="-mx-4 mt-2">
+          <CitationFlagsPanel flags={result.flagged_citations} />
+        </div>
+      )}
+
       {/* Plagiarism matches (Phase 4.4) — rendered inline below the card */}
       {showPlagiarismMatches && result.plagiarism_matches && result.plagiarism_matches.length > 0 && (
         <div className="-mx-4 mt-2">
           <PlagiarismPanel matches={result.plagiarism_matches} />
         </div>
+      )}
+
+      {/* Claim match breakdown (Phase 4.5) — expand/collapse per claim */}
+      {showClaimMatches && result.claim_matches && result.claim_matches.length > 0 && (
+        <ClaimMatchBreakdown claims={result.claim_matches} />
       )}
     </div>
   );
@@ -315,7 +469,9 @@ const IntegritySidebar: FC<IntegritySidebarProps> = ({
           key={config.key}
           config={config}
           result={results[config.key]}
+          showCitationFlags={config.key === "citation_check"}
           showPlagiarismMatches={config.key === "plagiarism_check"}
+          showClaimMatches={config.key === "claim_match"}
         />
       ))}
     </div>

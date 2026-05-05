@@ -77,6 +77,85 @@ export interface PlagiarismMatch {
 }
 
 // ---------------------------------------------------------------------------
+// Claim match types (Phase 4.5)
+// ---------------------------------------------------------------------------
+
+/** A source paper used as evidence for a claim NLI verdict. */
+export interface ClaimSourceRef {
+  title: string;
+  url?: string | null;
+  /** First 300 chars of the abstract used as evidence. */
+  abstract_excerpt?: string | null;
+  year?: number | null;
+  authors?: string[];
+}
+
+/**
+ * A single claim extracted from the document with its NLI verdict.
+ *
+ * verdict:
+ *   "entailed"     — at least one source supports with confidence > 0.7  ✓
+ *   "contradicted" — at least one source contradicts                      ✗
+ *   "unsupported"  — no supporting evidence found                         ⚠
+ */
+export interface ClaimMatch {
+  /** The specific factual assertion. */
+  claim: string;
+  /** Full sentence containing the claim. */
+  sentence: string;
+  /** "statistic" | "causal" | "correlation" | "definition" | "quote" | "general" */
+  claim_type: string;
+  /** "entailed" | "contradicted" | "unsupported" */
+  verdict: "entailed" | "contradicted" | "unsupported";
+  /** NLI confidence 0–1. */
+  confidence: number;
+  /** Plain-English explanation of the verdict. */
+  explanation: string;
+  /** Papers used as evidence (up to 3). */
+  supporting_sources: ClaimSourceRef[];
+  /** Start character offset of the claim in the document content. */
+  char_start: number;
+  /** End character offset (exclusive). */
+  char_end: number;
+}
+
+// ---------------------------------------------------------------------------
+// Citation check types (Phase 4.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single citation issue found by the citation check engine.
+ *
+ * issue_type:
+ *   "format_error"      — malformed DOI, implausible year, etc.
+ *   "missing_field"     — no title / author / year
+ *   "doi_not_found"     — DOI returned 404 from CrossRef
+ *   "title_mismatch"    — CrossRef title differs significantly from cited title
+ *   "author_mismatch"   — first author doesn't match CrossRef record
+ *   "retracted"         — paper retracted per Semantic Scholar
+ *   "quote_mismatch"    — quoted phrase not found in abstract
+ *   "predatory_journal" — journal absent from DOAJ
+ */
+export interface FlaggedCitation {
+  /** The citation reference text (truncated to 120 chars). */
+  citation_text: string;
+  /** Machine-readable issue category. */
+  issue_type:
+    | "format_error"
+    | "missing_field"
+    | "doi_not_found"
+    | "title_mismatch"
+    | "author_mismatch"
+    | "retracted"
+    | "quote_mismatch"
+    | "predatory_journal";
+  /** Plain-English explanation shown in the UI. */
+  detail: string;
+  /** "high" | "medium" | "low" */
+  severity: "high" | "medium" | "low";
+}
+
+// ---------------------------------------------------------------------------
 // Per-engine check result
 // ---------------------------------------------------------------------------
 
@@ -94,8 +173,12 @@ export interface CheckResult {
   summary: string;
   /** Algorithm / data-source identifier (e.g. "perplexity+burstiness"). */
   method?: string;
+  /** Per-citation issues found by the citation check engine (Phase 4.3+). */
+  flagged_citations?: FlaggedCitation[];
   /** Rich per-match data from the plagiarism engine (Phase 4.4+). */
   plagiarism_matches?: PlagiarismMatch[];
+  /** Per-claim NLI verdicts from the claim match engine (Phase 4.5+). */
+  claim_matches?: ClaimMatch[];
 }
 
 // ---------------------------------------------------------------------------

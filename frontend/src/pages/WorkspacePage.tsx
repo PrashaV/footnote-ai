@@ -27,6 +27,7 @@ import { useIntegrityAnalyze } from "../hooks/useIntegrityAnalyze";
 import { CitationExtension } from "../components/editor/CitationExtension";
 import { AIHighlightExtension, aiHighlightKey } from "../components/editor/AIHighlightExtension";
 import { PlagiarismHighlightExtension, plagiarismHighlightKey } from "../components/editor/PlagiarismHighlightExtension";
+import { ClaimHighlightExtension, claimHighlightKey } from "../components/editor/ClaimHighlightExtension";
 import SourcesSidebar, { type SidebarTab } from "../components/editor/SourcesSidebar";
 import IntegritySidebar from "../components/integrity/IntegritySidebar";
 import AuthModal from "../components/AuthModal";
@@ -141,7 +142,7 @@ const WorkspacePage: FC = () => {
 
   // ── TipTap editor ────────────────────────────────────────────────────────
   const editor = useEditor({
-    extensions: [StarterKit, citationExtension, AIHighlightExtension, PlagiarismHighlightExtension],
+    extensions: [StarterKit, citationExtension, AIHighlightExtension, PlagiarismHighlightExtension, ClaimHighlightExtension],
     content: "",
     onUpdate: ({ editor }) => {
       updateContent(editor.getJSON());
@@ -206,6 +207,18 @@ const WorkspacePage: FC = () => {
     const sections = integrityResults?.plagiarism_check?.flagged_sections ?? [];
     editor.view.dispatch(
       editor.view.state.tr.setMeta(plagiarismHighlightKey, { sections }),
+    );
+  }, [editor, integrityResults]);
+
+  // ── Apply claim match decorations (green/orange/red inline highlights) ───
+  useEffect(() => {
+    if (!editor?.view) return;
+
+    // flagged_sections from claim_match carry "claim_[verdict]: explanation"
+    // prefixed reasons — ClaimHighlightExtension decodes these into styles.
+    const sections = integrityResults?.claim_match?.flagged_sections ?? [];
+    editor.view.dispatch(
+      editor.view.state.tr.setMeta(claimHighlightKey, { sections }),
     );
   }, [editor, integrityResults]);
 
