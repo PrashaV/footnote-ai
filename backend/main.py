@@ -254,8 +254,9 @@ async def integrity_analyze(
     Each check result is persisted to the ``integrity_results`` Supabase table
     before the combined response is returned to the client.
 
-    Phase 4.1: all four engines are stubs returning placeholder results.
-    Subsequent phases (4.2–4.5) replace each stub with a real implementation.
+    Phase 4.1: skeleton. Phase 4.2: AI detection live. Phase 4.3: citations live.
+    Phase 4.4: plagiarism live (embedding + Semantic Scholar + self-plagiarism).
+    Phase 4.5: claim matching — pending.
     """
     user_id = _user.get("sub", "unknown")
     word_count = len(payload.content.split())
@@ -269,9 +270,12 @@ async def integrity_analyze(
     )
 
     # Run all four checks in parallel.
+    # user_id + document_id are threaded through for plagiarism self-check.
     ai_result, citation_result, plagiarism_result, claim_result = await analyze_integrity(
         payload.content,
         payload.citations,
+        user_id=user_id,
+        document_id=payload.document_id,
     )
 
     # Persist each result to Supabase (best-effort — don't fail the request if this errors).

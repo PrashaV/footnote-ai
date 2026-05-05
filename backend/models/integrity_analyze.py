@@ -5,6 +5,7 @@ Each of the four integrity engines returns a CheckResult with a normalised
 value, and a human-readable summary.
 
 Phase 4.1 — skeleton only. Engine implementations follow in 4.2–4.5.
+Phase 4.4 — adds PlagiarismMatch and plagiarism_matches field on CheckResult.
 """
 
 from __future__ import annotations
@@ -106,16 +107,71 @@ class FlaggedCitation(BaseModel):
     severity: str = Field(..., description="'high' | 'medium' | 'low'")
 
 
+# ---------------------------------------------------------------------------
+# Plagiarism match (Phase 4.4)
+# ---------------------------------------------------------------------------
+
+
+class MatchedSource(BaseModel):
+    """External source that a plagiarism-flagged chunk was matched against."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    paperId: Optional[str] = Field(default=None, description="Semantic Scholar paper ID.")
+    title: str = Field(..., description="Paper or document title.")
+    authors: list[str] = Field(default_factory=list, description="Author names.")
+    year: Optional[int] = Field(default=None, description="Publication year.")
+    url: Optional[str] = Field(default=None, description="Link to the source paper.")
+    doi: Optional[str] = Field(default=None, description="DOI if available.")
+    is_self: bool = Field(
+        default=False,
+        description="True when the source is one of the user's own previous documents.",
+    )
+
+
+class PlagiarismMatch(BaseModel):
+    """A single plagiarism match returned by the plagiarism check engine."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    text_excerpt: str = Field(
+        ...,
+        description="Verbatim excerpt from the current document (≤ 300 chars).",
+    )
+    start_char: int = Field(..., ge=0, description="Start character offset in the document.")
+    end_char: int = Field(..., ge=0, description="End character offset (exclusive).")
+    matched_source: dict = Field(
+        ...,
+        description="Source the chunk was matched against (title, url, paperId, …).",
+    )
+    similarity_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity between the chunk embedding and the source abstract.",
+    )
+    match_type: str = Field(
+        ...,
+        description=(
+            "'exact' (≥0.88) | 'paraphrase' (≥0.75) | "
+            "'mosaic' (consecutive cross-source sentences) | "
+            "'self' (user's own previous document)"
+        ),
+    )
+
+
 class CheckResult(BaseModel):
     """Normalised result from a single integrity check engine.
 
-    score:            0.0 (worst) → 1.0 (best / most trustworthy)
-                      Exception: ai_detection uses score as AI-likelihood (0 = human, 1 = AI).
-    flagged:          True if the check found something worth reviewing
-    flagged_sections: Zero or more character ranges in the source document
-    confidence:       How certain the engine is (0.0 = uncertain, 1.0 = certain)
-    summary:          One or two sentences for display in the UI
-    method:           Optional engine/algorithm identifier (e.g. "perplexity+burstiness")
+    score:              0.0 (worst) → 1.0 (best / most trustworthy)
+                        Exception: ai_detection uses score as AI-likelihood (0 = human, 1 = AI).
+    flagged:            True if the check found something worth reviewing
+    flagged_sections:   Zero or more character ranges in the source document
+    confidence:         How certain the engine is (0.0 = uncertain, 1.0 = certain)
+    summary:            One or two sentences for display in the UI
+    method:             Optional engine/algorithm identifier (e.g. "perplexity+burstiness")
+    flagged_citations:  Per-citation issues (citation check engine, Phase 4.3+)
+    plagiarism_matches: Rich per-match data (plagiarism engine, Phase 4.4+)
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -132,6 +188,10 @@ class CheckResult(BaseModel):
     flagged_citations: list[FlaggedCitation] = Field(
         default_factory=list,
         description="Per-citation issues found by the citation check engine (Phase 4.3+).",
+    )
+    plagiarism_matches: list[PlagiarismMatch] = Field(
+        default_factory=list,
+        description="Rich per-match data from the plagiarism check engine (Phase 4.4+).",
     )
 
 

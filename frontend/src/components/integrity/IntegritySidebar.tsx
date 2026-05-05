@@ -4,13 +4,13 @@
 // Shows a card per engine with a pass/warn/fail badge, score bar, confidence,
 // and summary text.
 //
-// Phase 4.2: AI Detection card uses green/yellow/red color coding matching
-// the AI-likelihood thresholds: green (<0.3), yellow (0.3–0.6), red (>0.6).
-// The score for AI detection is INVERTED from the others: high = bad.
+// Phase 4.2: AI Detection card — green/yellow/red based on AI-likelihood.
+// Phase 4.4: Plagiarism card — expands to show PlagiarismPanel match list.
 
 import { type FC } from "react";
 import type { CheckResult, IntegrityAnalyzeResponse } from "../../api/integrityAnalyzeTypes";
 import { scoreToBadge, type IntegrityBadge } from "../../api/integrityAnalyzeTypes";
+import PlagiarismPanel from "./PlagiarismPanel";
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -107,9 +107,11 @@ const ENGINE_CONFIGS: EngineConfig[] = [
 interface EngineCardProps {
   config: EngineConfig;
   result: CheckResult;
+  /** When true, renders PlagiarismPanel below the standard card summary. */
+  showPlagiarismMatches?: boolean;
 }
 
-const EngineCard: FC<EngineCardProps> = ({ config, result }) => {
+const EngineCard: FC<EngineCardProps> = ({ config, result, showPlagiarismMatches }) => {
   const badge = config.invertedScore
     ? aiScoreToBadge(result.score)
     : scoreToBadge(result.score, result.flagged);
@@ -175,9 +177,16 @@ const EngineCard: FC<EngineCardProps> = ({ config, result }) => {
       {/* Flagged section count */}
       {result.flagged_sections.length > 0 && (
         <p className="mt-1.5 text-[11px] font-medium text-amber-600">
-          {result.flagged_sections.length} flagged sentence
+          {result.flagged_sections.length} section
           {result.flagged_sections.length !== 1 ? "s" : ""} highlighted in editor
         </p>
+      )}
+
+      {/* Plagiarism matches (Phase 4.4) — rendered inline below the card */}
+      {showPlagiarismMatches && result.plagiarism_matches && result.plagiarism_matches.length > 0 && (
+        <div className="-mx-4 mt-2">
+          <PlagiarismPanel matches={result.plagiarism_matches} />
+        </div>
       )}
     </div>
   );
@@ -306,6 +315,7 @@ const IntegritySidebar: FC<IntegritySidebarProps> = ({
           key={config.key}
           config={config}
           result={results[config.key]}
+          showPlagiarismMatches={config.key === "plagiarism_check"}
         />
       ))}
     </div>

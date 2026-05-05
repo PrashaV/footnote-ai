@@ -26,6 +26,7 @@ import { useCitations } from "../hooks/useCitations";
 import { useIntegrityAnalyze } from "../hooks/useIntegrityAnalyze";
 import { CitationExtension } from "../components/editor/CitationExtension";
 import { AIHighlightExtension, aiHighlightKey } from "../components/editor/AIHighlightExtension";
+import { PlagiarismHighlightExtension, plagiarismHighlightKey } from "../components/editor/PlagiarismHighlightExtension";
 import SourcesSidebar, { type SidebarTab } from "../components/editor/SourcesSidebar";
 import IntegritySidebar from "../components/integrity/IntegritySidebar";
 import AuthModal from "../components/AuthModal";
@@ -140,7 +141,7 @@ const WorkspacePage: FC = () => {
 
   // ── TipTap editor ────────────────────────────────────────────────────────
   const editor = useEditor({
-    extensions: [StarterKit, citationExtension, AIHighlightExtension],
+    extensions: [StarterKit, citationExtension, AIHighlightExtension, PlagiarismHighlightExtension],
     content: "",
     onUpdate: ({ editor }) => {
       updateContent(editor.getJSON());
@@ -194,6 +195,17 @@ const WorkspacePage: FC = () => {
     const sections = integrityResults?.ai_detection?.flagged_sections ?? [];
     editor.view.dispatch(
       editor.view.state.tr.setMeta(aiHighlightKey, { sections }),
+    );
+  }, [editor, integrityResults]);
+
+  // ── Apply plagiarism highlight decorations (red underlines) ──────────────
+  useEffect(() => {
+    if (!editor?.view) return;
+
+    // Use flagged_sections from plagiarism_check (same character-offset space)
+    const sections = integrityResults?.plagiarism_check?.flagged_sections ?? [];
+    editor.view.dispatch(
+      editor.view.state.tr.setMeta(plagiarismHighlightKey, { sections }),
     );
   }, [editor, integrityResults]);
 

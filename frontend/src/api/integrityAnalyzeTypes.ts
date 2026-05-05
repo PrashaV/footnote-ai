@@ -2,6 +2,8 @@
 //
 // These mirror the Pydantic models in backend/models/integrity_analyze.py.
 // Keep both in sync when engine implementations land in Phases 4.2–4.5.
+//
+// Phase 4.4: added MatchedSource + PlagiarismMatch, extended CheckResult.
 
 // ---------------------------------------------------------------------------
 // Request
@@ -39,6 +41,45 @@ export interface FlaggedSection {
   reason: string;
 }
 
+// ---------------------------------------------------------------------------
+// Plagiarism-specific types (Phase 4.4)
+// ---------------------------------------------------------------------------
+
+/** External source that a plagiarism-flagged chunk was matched against. */
+export interface MatchedSource {
+  paperId?: string | null;
+  title: string;
+  authors?: string[];
+  year?: number | null;
+  url?: string | null;
+  doi?: string | null;
+  /** True when the source is one of the user's own previous documents. */
+  is_self?: boolean;
+}
+
+/**
+ * A single plagiarism match returned by the plagiarism check engine.
+ * match_type: "exact" | "paraphrase" | "mosaic" | "self"
+ */
+export interface PlagiarismMatch {
+  /** Verbatim excerpt from the current document (≤ 300 chars). */
+  text_excerpt: string;
+  /** Start character offset in the document (inclusive). */
+  start_char: number;
+  /** End character offset (exclusive). */
+  end_char: number;
+  /** Source the chunk was matched against. */
+  matched_source: MatchedSource;
+  /** Cosine similarity between chunk embedding and source abstract (0–1). */
+  similarity_score: number;
+  /** "exact" ≥0.88 | "paraphrase" ≥0.75 | "mosaic" | "self" */
+  match_type: "exact" | "paraphrase" | "mosaic" | "self";
+}
+
+// ---------------------------------------------------------------------------
+// Per-engine check result
+// ---------------------------------------------------------------------------
+
 export interface CheckResult {
   /** 0.0 = worst, 1.0 = best / most trustworthy.
    *  Exception: ai_detection uses 0.0 = human, 1.0 = AI (inverted). */
@@ -53,6 +94,8 @@ export interface CheckResult {
   summary: string;
   /** Algorithm / data-source identifier (e.g. "perplexity+burstiness"). */
   method?: string;
+  /** Rich per-match data from the plagiarism engine (Phase 4.4+). */
+  plagiarism_matches?: PlagiarismMatch[];
 }
 
 // ---------------------------------------------------------------------------
@@ -80,3 +123,22 @@ export function scoreToBadge(score: number, flagged: boolean): IntegrityBadge {
   if (score >= 0.5) return "warn";
   return "fail";
 }
+
+/** Human-readable label for a plagiarism match type. */
+export const MATCH_TYPE_LABELS: Record<PlagiarismMatch["match_type"], string> = {
+  exact:      "Exact match",
+  paraphrase: "Paraphrase",
+  mosaic:     "Mosaic",
+  self:       "Self-plagiarism",
+};
+
+/** Tailwind color tokens for each match type. */
+export const MATCH_TYPE_COLORS: Record<
+  PlagiarismMatch["match_type"],
+  { bg: string; text: string; ring: string }
+> = {
+  exact:      { bg: "bg-red-100",    text: "text-red-700",    ring: "ring-red-200" },
+  paraphrase: { bg: "bg-orange-100", text: "text-orange-700", ring: "ring-orange-200" },
+  mosaic:     { bg: "bg-amber-100",  text: "text-amber-700",  ring: "ring-amber-200" },
+  self:       { bg: "bg-purple-100", text: "text-purple-700", ring: "ring-purple-200" },
+};
