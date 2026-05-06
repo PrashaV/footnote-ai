@@ -68,11 +68,15 @@ MAX_SENTENCES_TO_SCORE = 30
 # Skips common abbreviations so "Dr. Smith" or "et al. (2022)" don't split.
 _SENT_BOUNDARY = re.compile(
     r"""
-    (?<!\b(?:Mr|Ms|Dr|Prof|Sr|Jr|vs|etc|al|eg|ie|Fig|No|Vol|pp|cf)\.)
-    (?<![A-Z]\.)        # not after single-letter initial
-    (?<=[.!?])          # must follow end-punctuation
-    \s+                 # the whitespace gap between sentences
-    (?=[A-Z"'\u201c])  # followed by capital or opening quote
+    (?<!Mr\.)(?<!Ms\.)(?<!Dr\.)(?<!Sr\.)(?<!Jr\.)  # 2-letter abbrevs
+    (?<!vs\.)(?<!al\.)(?<!eg\.)(?<!ie\.)(?<!No\.)
+    (?<!pp\.)(?<!cf\.)
+    (?<!etc\.)(?<!Fig\.)(?<!Vol\.)                  # 3-letter abbrevs
+    (?<!Prof\.)                                      # 4-letter abbrev
+    (?<![A-Z]\.)                                     # not after single-letter initial
+    (?<=[.!?])                                       # must follow end-punctuation
+    \s+                                              # the whitespace gap between sentences
+    (?=[A-Z"'\u201c])                               # followed by capital or opening quote
     """,
     re.VERBOSE,
 )
