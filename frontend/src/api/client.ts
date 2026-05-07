@@ -28,7 +28,7 @@ const baseURL =
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL,
-  timeout: 60_000, // deep research calls can take a while
+  timeout: 180_000, // 3 minutes — Railway cold start + Claude API can be slow
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
