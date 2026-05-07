@@ -8,11 +8,10 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from auth import get_current_user
 from db import get_supabase
 from models.research import ResearchRequest, ResearchResponse
 from models.verify import IntegrityReport, VerifyRequest
@@ -110,14 +109,12 @@ async def root() -> dict[str, str]:
 async def verify(
     request: Request,
     payload: VerifyRequest,
-    _user: dict = Depends(get_current_user),
 ) -> IntegrityReport:
     """Verify a research draft for citation integrity, AI writing patterns,
     and plagiarism risk. Returns a structured IntegrityReport with scores,
     warnings, flagged passages, and recommended fixes."""
     logger.info(
-        "verify request: user=%s title=%r checks=[citations=%s, ai=%s, plagiarism=%s] words=%d",
-        _user.get("sub", "unknown"),
+        "verify request: title=%r checks=[citations=%s, ai=%s, plagiarism=%s] words=%d",
         payload.title,
         payload.check_citations,
         payload.check_ai_writing,
@@ -143,12 +140,10 @@ async def health() -> dict[str, str]:
 async def research(
     request: Request,
     payload: ResearchRequest,
-    _user: dict = Depends(get_current_user),
 ) -> ResearchResponse:
     """Generate a ResearchResponse for the requested topic and depth."""
     logger.info(
-        "research request: user=%s topic=%r depth=%s",
-        _user.get("sub", "unknown"),
+        "research request: topic=%r depth=%s",
         payload.topic,
         payload.depth,
     )
@@ -163,7 +158,6 @@ async def research(
 )
 async def citations_search(
     request: Request,
-    _user: dict = Depends(get_current_user),
 ) -> list[dict]:
     """Proxy citation autocomplete queries to the Semantic Scholar API.
 
@@ -178,11 +172,7 @@ async def citations_search(
     if not query:
         return []
 
-    logger.info(
-        "citations search: user=%s query=%r",
-        _user.get("sub", "unknown"),
-        query[:60],
-    )
+    logger.info("citations search: query=%r", query[:60])
 
     results = await search_citations(query)
     return [
@@ -208,10 +198,9 @@ async def citations_search(
 async def export_docx(
     request: Request,
     payload: ResearchResponse,
-    _user: dict = Depends(get_current_user),
 ) -> Response:
     """Accept a ResearchResponse and return a formatted .docx file download."""
-    logger.info("export request: user=%s topic=%r", _user.get("sub", "unknown"), payload.topic)
+    logger.info("export request: topic=%r", payload.topic)
 
     doc_bytes = generate_docx(payload)
 
@@ -246,7 +235,6 @@ async def export_docx(
 )
 async def integrity_analyze(
     payload: IntegrityAnalyzeRequest,
-    _user: dict = Depends(get_current_user),
 ) -> IntegrityAnalyzeResponse:
     """Run ai_detection, citation_check, plagiarism_check, and claim_match
     concurrently for the given document.
@@ -258,12 +246,11 @@ async def integrity_analyze(
     Phase 4.4: plagiarism live (embedding + Semantic Scholar + self-plagiarism).
     Phase 4.5: claim matching — pending.
     """
-    user_id = _user.get("sub", "unknown")
+    user_id = "anonymous"
     word_count = len(payload.content.split())
 
     logger.info(
-        "integrity/analyze: user=%s document_id=%s citations=%d words=%d",
-        user_id,
+        "integrity/analyze: document_id=%s citations=%d words=%d",
         payload.document_id,
         len(payload.citations),
         word_count,

@@ -101,18 +101,46 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
       return;
     }
 
-    // Get initial session
-    client.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setIsLoading(false);
-    });
-
-    // Listen for auth state changes
+    // Listen for auth state changes first so we never miss an event.
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      // If we were loading and a session arrived via auth callback, stop loading.
+      setIsLoading(false);
     });
+
+    // Handle PKCE magic-link / OTP callback:
+    // Supabase redirects back to the app with ?code=<pkce_code> in the URL.
+    // We must exchange that code for a session explicitly; then clean the URL
+    // so a page refresh doesn't try to re-exchange the (already-used) code.
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get("code");
+
+    if (code) {
+      client.auth
+        .exchangeCodeForSession(code)
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("[auth] PKCE code exchange failed:", error.message);
+          } else if (data.session) {
+            setSession(data.session);
+            setUser(data.session.user);
+          }
+          // Remove ?code=… from the URL so a refresh doesn't re-attempt exchange.
+          const cleanUrl =
+            window.location.pathname +
+            (window.location.hash || "");
+          window.history.replaceState({}, "", cleanUrl);
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      // Normal startup — restore session from storage (or hash token on older flows).
+      client.auth.getSession().then(({ data }) => {
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+        setIsLoading(false);
+      });
+    }
 
     return () => subscription.unsubscribe();
   }, [client]);
@@ -121,7 +149,12 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
     if (!client) return { error: "Supabase is not configured." };
     const { error } = await client.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        // Redirect back to whichever origin sent the magic link
+        // (localhost in dev, production URL on Vercel)
+        emailRedirectTo: window.location.origin,
+      },
     });
     return { error: error?.message ?? null };
   };

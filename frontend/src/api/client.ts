@@ -14,7 +14,6 @@ import type {
   IntegrityAnalyzeRequest,
   IntegrityAnalyzeResponse,
 } from "./integrityAnalyzeTypes";
-import { getSupabaseClient } from "../contexts/AuthContext";
 
 // ---------------------------------------------------------------------------
 // Axios instance
@@ -35,84 +34,6 @@ export const apiClient: AxiosInstance = axios.create({
     Accept: "application/json",
   },
 });
-
-// ---------------------------------------------------------------------------
-// Auth interceptor — attach Supabase JWT as Bearer token on every request
-// ---------------------------------------------------------------------------
-
-apiClient.interceptors.request.use(async (config) => {
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
-});
-
-// ---------------------------------------------------------------------------
-// 401 retry interceptor — if the server rejects with 401 (expired token),
-// ask Supabase to refresh the session and retry the request exactly once.
-// This handles the race where the token expires between the request interceptor
-// reading it and the server validating it.
-// ---------------------------------------------------------------------------
-
-let _isRefreshing = false;
-let _refreshQueue: Array<(token: string | null) => void> = [];
-
-function _drainQueue(token: string | null) {
-  _refreshQueue.forEach((resolve) => resolve(token));
-  _refreshQueue = [];
-}
-
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as typeof error.config & { _retried?: boolean };
-
-    // Only intercept 401 errors that haven't already been retried.
-    if (error.response?.status !== 401 || originalRequest?._retried) {
-      return Promise.reject(error);
-    }
-
-    const supabase = getSupabaseClient();
-    if (!supabase) return Promise.reject(error);
-
-    originalRequest._retried = true;
-
-    if (_isRefreshing) {
-      // Another request already kicked off a refresh — wait for its result.
-      return new Promise((resolve, reject) => {
-        _refreshQueue.push((newToken) => {
-          if (!newToken || !originalRequest) return reject(error);
-          originalRequest.headers = originalRequest.headers ?? {};
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          resolve(apiClient(originalRequest));
-        });
-      });
-    }
-
-    _isRefreshing = true;
-    try {
-      const { data, error: refreshError } = await supabase.auth.refreshSession();
-      const newToken = data.session?.access_token ?? null;
-
-      if (refreshError || !newToken) {
-        _drainQueue(null);
-        return Promise.reject(error);
-      }
-
-      _drainQueue(newToken);
-      originalRequest.headers = originalRequest.headers ?? {};
-      originalRequest.headers.Authorization = `Bearer ${newToken}`;
-      return apiClient(originalRequest);
-    } finally {
-      _isRefreshing = false;
-    }
-  },
-);
 
 // ---------------------------------------------------------------------------
 // Error helper

@@ -8,7 +8,7 @@
 //   • User avatar / sign-in button in header
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FC } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -16,13 +16,11 @@ import { useResearch } from "./hooks/useResearch";
 import { useVerify } from "./hooks/useVerify";
 import type { ResearchRequest, ResearchResponse } from "./api/types";
 import type { VerifyRequest } from "./api/verifyTypes";
-import { saveSession, saveIntegrityReport } from "./services/supabase";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { AuthProvider } from "./contexts/AuthContext";
 
 import SearchBar from "./components/SearchBar";
 import ResultsPanel from "./components/ResultsPanel";
 import SessionHistory, { type SessionHistoryHandle } from "./components/SessionHistory";
-import AuthModal from "./components/AuthModal";
 import DraftInput from "./components/integrity/DraftInput";
 import IntegrityDashboard from "./components/integrity/IntegrityDashboard";
 
@@ -44,11 +42,9 @@ type AppTab = "research" | "verify";
 const AppShell: FC = () => {
   const { research, data, error, isLoading, isError } = useResearch();
   const { verify, data: integrityReport, error: verifyError, isLoading: isVerifying, isError: isVerifyError, reset: resetVerify } = useVerify();
-  const { user, isLoading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<AppTab>("research");
-  const [showAuth, setShowAuth] = useState(false);
 
   // Research tab state
   const [lastRequest, setLastRequest] = useState<ResearchRequest | null>(null);
@@ -87,25 +83,12 @@ const AppShell: FC = () => {
     lastToastedVerifyErrorRef.current = key;
   }, [isVerifyError, verifyError]);
 
-  // ── Save research session after success ───────────────────────────────
+  // ── Refresh session history after successful research ─────────────────
   useEffect(() => {
     if (!data || !lastRequest) return;
-    saveSession(lastRequest.topic, data, user?.id).then(() => {
-      sessionHistoryRef.current?.refresh();
-    });
+    sessionHistoryRef.current?.refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
-
-  // ── Save integrity report after success ───────────────────────────────
-  useEffect(() => {
-    if (!integrityReport) return;
-    saveIntegrityReport(integrityReport, user?.id ?? undefined).then((saved) => {
-      if (saved) {
-        toast.success("Integrity report saved.", { id: "report-saved", duration: 3000 });
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [integrityReport]);
 
   // ── Research handlers ─────────────────────────────────────────────────
   const handleSubmit = useCallback((request: ResearchRequest) => {
@@ -181,38 +164,10 @@ const AppShell: FC = () => {
             </button>
           </div>
 
-          {/* Auth control */}
-          {!authLoading && (
-            user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500 hidden sm:block">{user.email}</span>
-                <button
-                  onClick={() => signOut()}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs
-                    font-medium text-slate-600 hover:border-slate-400 transition"
-                >
-                  Sign out
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAuth((v) => !v)}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold
-                  text-white transition hover:bg-indigo-700"
-              >
-                Sign in
-              </button>
-            )
-          )}
+          {/* placeholder to keep header layout balanced */}
+          <div />
         </div>
       </header>
-
-      {/* ── Auth panel (inline, dismissible) ───────────────────────────── */}
-      {showAuth && !user && (
-        <div className="mx-auto max-w-sm mt-4 px-4">
-          <AuthModal onClose={() => setShowAuth(false)} />
-        </div>
-      )}
 
       {/* ── Main content ───────────────────────────────────────────────── */}
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-6">
