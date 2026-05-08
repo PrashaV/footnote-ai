@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Footnote AI — Research Participation Interest</title>
+  <meta name="description" content="Register your interest in participating in a research evaluation of Footnote, an AI-powered academic literature intelligence tool." />
+
+  <!-- ─────────────────────────────────────────────────────────────
+       SETUP INSTRUCTIONS (read before deploying)
+       ─────────────────────────────────────────────────────────────
+       1. Open Google Sheets → create a new sheet named "Footnote Interest"
+          with these columns in row 1:
+          Timestamp | Name | Email | Institution | Role | Research Area | How Heard
+
+       2. Extensions → Apps Script → paste this script:
+
+          function doPost(e) {
+            var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+            var data = JSON.parse(e.postData.contents);
+            sheet.appendRow([
+              new Date(),
+              data.name,
+              data.email,
+              data.institution,
+              data.role,
+              data.researchArea,
+              data.howHeard
+            ]);
+            return ContentService
+              .createTextOutput(JSON.stringify({ result: "success" }))
+              .setMimeType(ContentService.MimeType.JSON);
+          }
+
+       3. Deploy → New deployment → Web app
+          - Execute as: Me
+          - Who has access: Anyone
+          - Copy the deployment URL
+
+       4. Replace GOOGLE_SCRIPT_URL below with your deployment URL.
+       ───────────────────────────────────────────────────────────── -->
+
+  <script>
+    const GOOGLE_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_DEPLOYMENT_URL_HERE";
+  </script>
+
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:       #0f1117;
+      --ink-soft:  #4a5568;
+      --ink-muted: #718096;
+      --accent:    #2563eb;
+      --accent-dk: #1d4ed8;
+      --accent-lt: #eff6ff;
+      --border:    #e2e8f0;
+      --bg:        #f8fafc;
+      --white:     #ffffff;
+      --success:   #059669;
+      --error:     #dc2626;
+      --radius:    10px;
+      --shadow:    0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header strip ── */
+    .site-header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-mark {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-mark svg { width: 18px; height: 18px; fill: #fff; }
+    .logo-text { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; color: var(--ink); }
+    .logo-text span { color: var(--accent); }
+    .badge {
+      margin-left: auto;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-lt);
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid #bfdbfe;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 60%, #2563eb 100%);
+      color: #fff;
+      padding: 72px 32px 80px;
+      text-align: center;
+    }
+    .hero-eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #93c5fd;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 46px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      max-width: 700px;
+      margin: 0 auto 20px;
+    }
+    .hero p {
+      font-size: 18px;
+      color: #bfdbfe;
+      max-width: 560px;
+      margin: 0 auto 32px;
+      line-height: 1.65;
+    }
+    .hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    .pill {
+      font-size: 13px;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 20px;
+    }
+
+    /* ── What you get ── */
+    .what-section {
+      max-width: 860px;
+      margin: 60px auto 0;
+      padding: 0 24px;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(22px, 3vw, 30px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 32px;
+      color: var(--ink);
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 56px;
+    }
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+    .card-icon {
+      font-size: 28px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .card p  { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; }
+
+    /* ── Form card ── */
+    .form-wrap {
+      max-width: 620px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .form-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 40px 36px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.09);
+    }
+    .form-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--ink);
+      letter-spacing: -0.3px;
+    }
+    .form-sub {
+      font-size: 14px;
+      color: var(--ink-muted);
+      margin-bottom: 28px;
+    }
+
+    /* ── Inputs ── */
+    .field { margin-bottom: 20px; }
+    label {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 7px;
+    }
+    label .req { color: var(--accent); margin-left: 2px; }
+    label .hint {
+      font-weight: 400;
+      color: var(--ink-muted);
+      font-size: 12.5px;
+      margin-left: 4px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 11px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--ink);
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color .15s, box-shadow .15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+
+    .select-wrap { position: relative; }
+    .select-wrap::after {
+      content: "";
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid var(--ink-muted);
+      pointer-events: none;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* ── Role chips ── */
+    .chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip-group input[type="radio"] { display: none; }
+    .chip-group label {
+      margin: 0;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--ink-soft);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .chip-group input[type="radio"]:checked + label {
+      background: var(--accent-lt);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+
+    /* ── Consent ── */
+    .consent {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .consent input[type="checkbox"] {
+      margin-top: 3px;
+      width: 16px; height: 16px;
+      accent-color: var(--accent);
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .consent p {
+      font-size: 12.5px;
+      color: var(--ink-muted);
+      line-height: 1.55;
+    }
+
+    /* ── Submit button ── */
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      letter-spacing: .1px;
+    }
+    .btn-submit:hover  { background: var(--accent-dk); box-shadow: 0 4px 14px rgba(37,99,235,.35); }
+    .btn-submit:active { transform: scale(.99); }
+    .btn-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* ── States ── */
+    .alert {
+      display: none;
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .alert.success {
+      background: #ecfdf5;
+      border: 1px solid #6ee7b7;
+      color: var(--success);
+    }
+    .alert.error {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: var(--error);
+    }
+
+    /* ── Success screen ── */
+    .success-screen {
+      display: none;
+      text-align: center;
+      padding: 20px 0;
+    }
+    .success-screen .check-circle {
+      width: 64px; height: 64px;
+      background: #d1fae5;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .success-screen .check-circle svg { width: 32px; height: 32px; stroke: var(--success); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .success-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; color: var(--ink); }
+    .success-screen p  { font-size: 15px; color: var(--ink-soft); line-height: 1.65; max-width: 400px; margin: 0 auto; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 13px;
+      color: var(--ink-muted);
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Mobile ── */
+    @media (max-width: 520px) {
+      .form-card { padding: 28px 20px 24px; }
+      .field-row { grid-template-columns: 1fr; }
+      .hero { padding: 52px 20px 60px; }
+      .site-header { padding: 14px 20px; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="logo-mark">
+      <!-- footnote "F" mark -->
+      <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="3" width="14" height="2.5" rx="1"/>
+        <rect x="3" y="7.5" width="9" height="2.5" rx="1"/>
+        <rect x="3" y="12" width="14" height="2.5" rx="1"/>
+        <circle cx="15" cy="16.5" r="2"/>
+      </svg>
+    </div>
+    <span class="logo-text">Footnote<span>.</span></span>
+    <span class="badge">Research Preview</span>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <p class="hero-eyebrow">IEEE Access · User Study Recruitment</p>
+    <h1>Help shape the future of AI-powered research</h1>
+    <p>We're recruiting expert evaluators for a user study of Footnote — an AI system that automates literature review and citation intelligence.</p>
+    <div class="hero-pills">
+      <span class="pill">⏱ 45–60 min commitment</span>
+      <span class="pill">📄 Acknowledged in publication</span>
+      <span class="pill">🔒 Gated access — limited spots</span>
+      <span class="pill">📬 No spam, ever</span>
+    </div>
+  </section>
+
+  <!-- What you get -->
+  <section class="what-section">
+    <p class="section-label">Why participate</p>
+    <h2 class="section-title">What's involved</h2>
+    <div class="cards">
+      <div class="card">
+        <span class="card-icon">🔍</span>
+        <h3>Evaluate a live system</h3>
+        <p>You'll get gated access to Footnote and complete a structured task — running a real literature search in your domain.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">📋</span>
+        <h3>Short survey</h3>
+        <p>A 10-minute post-task questionnaire measuring usability, accuracy, and research workflow fit.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">✍️</span>
+        <h3>Named acknowledgement</h3>
+        <p>Participants will be acknowledged by name and institution in the IEEE Access paper, unless you opt out.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">📊</span>
+        <h3>Early access</h3>
+        <p>All participants receive continued early access to Footnote as the system develops post-publication.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Form -->
+  <section class="form-wrap" id="register">
+    <div class="form-card">
+
+      <!-- Success screen (hidden until submit) -->
+      <div class="success-screen" id="successScreen">
+        <div class="check-circle">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2>You're registered!</h2>
+        <p>We'll review your background and send access details within 48 hours. Thank you for contributing to this research.</p>
+      </div>
+
+      <!-- Form content -->
+      <div id="formContent">
+        <h2 class="form-title">Register your interest</h2>
+        <p class="form-sub">All fields marked <span style="color:var(--accent)">*</span> are required. We review every submission individually.</p>
+
+        <div class="alert" id="alertBox"></div>
+
+        <form id="interestForm" novalidate>
+
+          <!-- Name + Email -->
+          <div class="field-row">
+            <div class="field">
+              <label for="name">Full name <span class="req">*</span></label>
+              <input type="text" id="name" name="name" placeholder="Dr. Jane Smith" required autocomplete="name" />
+            </div>
+            <div class="field">
+              <label for="email">Institutional email <span class="req">*</span></label>
+              <input type="email" id="email" name="email" placeholder="j.smith@university.edu" required autocomplete="email" />
+            </div>
+          </div>
+
+          <!-- Institution -->
+          <div class="field">
+            <label for="institution">Institution / Organisation <span class="req">*</span></label>
+            <input type="text" id="institution" name="institution" placeholder="University of Toronto" required />
+          </div>
+
+          <!-- Role -->
+          <div class="field">
+            <label>Current role <span class="req">*</span></label>
+            <div class="chip-group" id="roleGroup">
+              <input type="radio" name="role" id="role-phd"      value="PhD Student"   required />
+              <label for="role-phd">PhD Student</label>
+
+              <input type="radio" name="role" id="role-postdoc"  value="Postdoc" />
+              <label for="role-postdoc">Postdoc</label>
+
+              <input type="radio" name="role" id="role-faculty"  value="Faculty" />
+              <label for="role-faculty">Faculty</label>
+
+              <input type="radio" name="role" id="role-research" value="Research Scientist" />
+              <label for="role-research">Research Scientist</label>
+
+              <input type="radio" name="role" id="role-other"    value="Other" />
+              <label for="role-other">Other</label>
+            </div>
+          </div>
+
+          <!-- Research area -->
+          <div class="field">
+            <label for="researchArea">Primary research area <span class="req">*</span>
+              <span class="hint">— e.g. NLP, HCI, Bioinformatics, Library Science</span>
+            </label>
+            <input type="text" id="researchArea" name="researchArea" placeholder="Human-Computer Interaction" required />
+          </div>
+
+          <!-- How heard -->
+          <div class="field">
+            <label for="howHeard">How did you hear about this study?</label>
+            <div class="select-wrap">
+              <select id="howHeard" name="howHeard">
+                <option value="" disabled selected>Select one…</option>
+                <option value="Reddit (r/PhD / r/AskAcademia)">Reddit (r/PhD / r/AskAcademia)</option>
+                <option value="ResearchGate">ResearchGate</option>
+                <option value="Academia.edu">Academia.edu</option>
+                <option value="Twitter / X">Twitter / X</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="Email from the team">Email from the team</option>
+                <option value="Colleague referral">Colleague referral</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <hr class="divider" />
+
+          <!-- Consent -->
+          <div class="consent">
+            <input type="checkbox" id="consent" required />
+            <p>I understand that my name and institutional affiliation may be included in the acknowledgements of the associated IEEE Access paper, and that my participation data will be used solely for this research evaluation. I can withdraw at any time.</p>
+          </div>
+
+          <button type="submit" class="btn-submit" id="submitBtn">
+            Register interest →
+          </button>
+
+        </form>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>Footnote · AI-Powered Research Intelligence · <a href="https://footnote-ai-app.vercel.app" target="_blank">footnote-ai-app.vercel.app</a></p>
+    <p style="margin-top:6px;">Questions? Email <a href="mailto:goodvibepublishing@gmail.com">goodvibepublishing@gmail.com</a></p>
+  </footer>
+
+
+  <script>
+    const form       = document.getElementById("interestForm");
+    const submitBtn  = document.getElementById("submitBtn");
+    const alertBox   = document.getElementById("alertBox");
+    const formContent = document.getElementById("formContent");
+    const successScreen = document.getElementById("successScreen");
+
+    function showAlert(type, msg) {
+      alertBox.className = "alert " + type;
+      alertBox.textContent = msg;
+      alertBox.style.display = "block";
+      alertBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function hideAlert() {
+      alertBox.style.display = "none";
+    }
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      hideAlert();
+
+      // Basic validation
+      const name         = document.getElementById("name").value.trim();
+      const email        = document.getElementById("email").value.trim();
+      const institution  = document.getElementById("institution").value.trim();
+      const researchArea = document.getElementById("researchArea").value.trim();
+      const consent      = document.getElementById("consent").checked;
+      const roleInput    = document.querySelector('input[name="role"]:checked');
+      const howHeard     = document.getElementById("howHeard").value;
+
+      if (!name || !email || !institution || !researchArea) {
+        showAlert("error", "Please fill in all required fields.");
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showAlert("error", "Please enter a valid email address.");
+        return;
+      }
+      if (!roleInput) {
+        showAlert("error", "Please select your current role.");
+        return;
+      }
+      if (!consent) {
+        showAlert("error", "Please confirm consent to participate.");
+        return;
+      }
+
+      // Check script URL is configured
+      if (GOOGLE_SCRIPT_URL.startsWith("YOUR_")) {
+        // Dev fallback — log to console and show success for testing
+        console.log("Form data (configure GOOGLE_SCRIPT_URL to submit to Sheets):", {
+          name, email, institution, role: roleInput.value, researchArea, howHeard
+        });
+        formContent.style.display = "none";
+        successScreen.style.display = "block";
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting…";
+
+      const payload = {
+        name,
+        email,
+        institution,
+        role:         roleInput.value,
+        researchArea,
+        howHeard:     howHeard || "Not specified"
+      };
+
+      try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",          // Apps Script requires no-cors
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        // no-cors means we can't read the response — assume success
+        formContent.style.display = "none";
+        successScreen.style.display = "block";
+      } catch (err) {
+        showAlert("error", "Something went wrong. Please try again or email us directly.");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Register interest →";
+      }
+    });
+  </script>
+
+</body>
+</html>
