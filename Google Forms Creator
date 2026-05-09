@@ -1,0 +1,415 @@
+// Marketing and Participant Research ============================================================
+// FOOTNOTE — Google Forms Creator Script
+// Paste this entire file into https://script.google.com
+// Then click Run → run_all_forms (approve permissions once)
+// All three forms will appear in your Google Drive root.
+// ============================================================
+
+function run_all_forms() {
+  var links = [];
+  links.push(create_screening_form());
+  links.push(create_early_access_form());
+  links.push(create_post_use_survey());
+
+  // Print all URLs to the Apps Script log (View → Logs)
+  Logger.log("=== FOOTNOTE FORM LINKS ===");
+  Logger.log("1. PhD Pilot Screening:    " + links[0]);
+  Logger.log("2. Early Access Sign-up:   " + links[1]);
+  Logger.log("3. Post-Use Survey:        " + links[2]);
+  Logger.log("===========================");
+}
+
+
+// ============================================================
+// FORM 1: PhD Pilot Study Screening (paid ₹50 participants)
+// ============================================================
+function create_screening_form() {
+  var form = FormApp.create("Footnote — PhD Pilot Study Screening");
+  form.setDescription(
+    "We are conducting a short research study on AI-powered academic literature tools. " +
+    "Selected participants will be compensated ₹50 for approximately 45 minutes of their time (remote, online). " +
+    "This form screens for eligibility. Only current PhD students are eligible. " +
+    "We will contact shortlisted applicants within 3–5 days."
+  );
+  form.setCollectEmail(true);
+  form.setConfirmationMessage(
+    "Thanks for applying! We'll review your responses and reach out within 3–5 days if you're selected."
+  );
+
+  // --- Section 1: Identity & Enrollment ---
+  form.addSectionHeaderItem()
+    .setTitle("About You")
+    .setHelpText("We need to verify that you are a currently enrolled PhD student.");
+
+  form.addTextItem()
+    .setTitle("Full Name")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("University / Institution")
+    .setHelpText("e.g. IIT Bombay, IISc Bangalore, University of Delhi")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Department / Faculty")
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Which year of your PhD are you currently in?")
+    .setChoiceValues(["1st year", "2nd year", "3rd year", "4th year", "5th year or beyond"])
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Brief thesis topic or research area")
+    .setHelpText("One or two sentences is fine — e.g. 'Federated learning for healthcare data privacy'")
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Can you verify your current PhD enrollment if selected?")
+    .setHelpText("e.g. student ID card, institutional email, enrollment letter")
+    .setChoiceValues(["Yes", "No"])
+    .setRequired(true);
+
+  // --- Section 2: Literature Review Habits ---
+  form.addSectionHeaderItem()
+    .setTitle("Your Literature Review Habits")
+    .setHelpText("Help us understand how you currently work.");
+
+  form.addMultipleChoiceItem()
+    .setTitle("How often do you search academic literature?")
+    .setChoiceValues(["Daily", "Several times a week", "About once a week", "Less than once a week"])
+    .setRequired(true);
+
+  var toolsItem = form.addCheckboxItem();
+  toolsItem.setTitle("Which tools do you currently use for literature review? (select all that apply)")
+    .setChoices([
+      toolsItem.createChoice("Google Scholar"),
+      toolsItem.createChoice("Semantic Scholar"),
+      toolsItem.createChoice("Elicit"),
+      toolsItem.createChoice("Consensus"),
+      toolsItem.createChoice("ResearchRabbit"),
+      toolsItem.createChoice("Connected Papers"),
+      toolsItem.createChoice("PubMed"),
+      toolsItem.createChoice("Web of Science / Scopus"),
+      toolsItem.createChoice("Other (please specify below)")
+    ])
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("If you selected 'Other', please specify:")
+    .setRequired(false);
+
+  form.addParagraphTextItem()
+    .setTitle("What is your biggest frustration with your current literature review process?")
+    .setHelpText("Be as specific as you like — there are no wrong answers.")
+    .setRequired(true);
+
+  // --- Section 3: Availability ---
+  form.addSectionHeaderItem()
+    .setTitle("Availability");
+
+  form.addMultipleChoiceItem()
+    .setTitle("Are you available for a ~45-minute online session in the next 2 weeks?")
+    .setChoiceValues(["Yes", "No — but I'm interested in the early access programme instead"])
+    .setRequired(true);
+
+  var timesItem = form.addCheckboxItem();
+  timesItem.setTitle("Which time slots generally work for you? (IST)")
+    .setChoices([
+      timesItem.createChoice("Weekday mornings (9am–12pm)"),
+      timesItem.createChoice("Weekday afternoons (12pm–5pm)"),
+      timesItem.createChoice("Weekday evenings (5pm–9pm)"),
+      timesItem.createChoice("Weekend mornings"),
+      timesItem.createChoice("Weekend afternoons / evenings")
+    ])
+    .setRequired(false);
+
+  form.addTextItem()
+    .setTitle("Any other notes or questions for us?")
+    .setRequired(false);
+
+  return form.getPublishedUrl();
+}
+
+
+// ============================================================
+// FORM 2: Early Access Sign-up (unpaid — invite code on approval)
+// ============================================================
+function create_early_access_form() {
+  var form = FormApp.create("Footnote — Early Access for PhD Researchers");
+  form.setDescription(
+    "Footnote is an AI-powered research briefing tool that synthesises academic literature into " +
+    "structured intelligence reports — key findings, a citation knowledge graph, research gaps, and more. " +
+    "\n\nSign up here to be among the first PhD researchers to try it. " +
+    "Once we verify your enrollment, we'll send you a personal invite code. " +
+    "No payment involved — just early access and the chance to shape the product."
+  );
+  form.setCollectEmail(true);
+  form.setConfirmationMessage(
+    "You're on the list! We'll verify your details and send your personal invite code within a few days. " +
+    "Keep an eye on this email address."
+  );
+
+  // --- Section 1: Who you are ---
+  form.addSectionHeaderItem()
+    .setTitle("About You");
+
+  form.addTextItem()
+    .setTitle("Full Name")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("University / Institution")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Department")
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("PhD year")
+    .setChoiceValues(["1st year", "2nd year", "3rd year", "4th year", "5th year or beyond"])
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Research area / thesis topic")
+    .setHelpText("A sentence or two — helps us understand what kinds of queries you'll be testing.")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Institutional email address")
+    .setHelpText("This is how we verify enrollment — e.g. name@iitb.ac.in. Must match a recognised university domain.")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("LinkedIn or academic profile URL (optional)")
+    .setHelpText("Speeds up verification — totally optional.")
+    .setRequired(false);
+
+  // --- Section 2: Research workflow ---
+  form.addSectionHeaderItem()
+    .setTitle("Your Research Workflow")
+    .setHelpText("This helps us prioritise features for PhD researchers specifically.");
+
+  form.addMultipleChoiceItem()
+    .setTitle("How often do you do a literature review or search?")
+    .setChoiceValues(["Daily", "A few times a week", "Weekly", "Monthly or less"])
+    .setRequired(true);
+
+  form.addParagraphTextItem()
+    .setTitle("What does your current literature review process look like?")
+    .setHelpText("Walk us through a typical session — which tools, how long, what frustrates you.")
+    .setRequired(true);
+
+  form.addParagraphTextItem()
+    .setTitle("What would an ideal AI research tool do for you?")
+    .setHelpText("No constraints — what would actually save you the most time?")
+    .setRequired(true);
+
+  // --- Section 3: Consent ---
+  form.addSectionHeaderItem()
+    .setTitle("One Last Thing");
+
+  form.addMultipleChoiceItem()
+    .setTitle("Are you happy to share anonymous feedback on your experience after using Footnote?")
+    .setHelpText("You'll receive a short survey after using your invite code. Completely voluntary.")
+    .setChoiceValues(["Yes, happy to", "I'd prefer not to"])
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Anything you'd like us to know?")
+    .setRequired(false);
+
+  return form.getPublishedUrl();
+}
+
+
+// ============================================================
+// FORM 3: Post-Use Survey (sent after invite code used)
+// ============================================================
+function create_post_use_survey() {
+  var form = FormApp.create("Footnote — Post-Use Feedback Survey");
+  form.setDescription(
+    "Thank you for trying Footnote! This short survey takes about 5–8 minutes. " +
+    "Your honest feedback directly shapes future development. " +
+    "All responses are anonymous unless you choose to identify yourself."
+  );
+  form.setCollectEmail(false);
+  form.setConfirmationMessage(
+    "Thank you — your feedback is invaluable and will directly shape Footnote's development. We really appreciate your time."
+  );
+
+  // --- Section 1: Usage context ---
+  form.addSectionHeaderItem()
+    .setTitle("Your Session");
+
+  form.addTextItem()
+    .setTitle("Your invite code")
+    .setHelpText("The code we sent you — helps us link responses without collecting your name.")
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("What topic did you search for in Footnote?")
+    .setHelpText("e.g. 'transformer attention mechanisms', 'CRISPR off-target effects'")
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Roughly how long did you spend using Footnote?")
+    .setChoiceValues(["Less than 5 minutes", "5–10 minutes", "10–20 minutes", "More than 20 minutes"])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Which depth mode did you use?")
+    .setChoiceValues(["Quick (3–5 papers)", "Deep (6–20 papers)", "Both / not sure"])
+    .setRequired(true);
+
+  // --- Section 2: SUS (System Usability Scale) ---
+  // Standard 10-item SUS — alternating positive/negative wording
+  form.addSectionHeaderItem()
+    .setTitle("Usability — 10 Quick Statements")
+    .setHelpText(
+      "Rate how much you agree with each statement about Footnote. " +
+      "1 = Strongly Disagree, 5 = Strongly Agree. " +
+      "Please answer based on your gut reaction — there are no right answers."
+    );
+
+  var susStatements = [
+    "I think that I would like to use Footnote frequently.",
+    "I found Footnote unnecessarily complex.",
+    "I thought Footnote was easy to use.",
+    "I think that I would need technical support to be able to use Footnote.",
+    "I found the various features in Footnote were well integrated.",
+    "I thought there was too much inconsistency in Footnote.",
+    "I imagine that most people would learn to use Footnote very quickly.",
+    "I found Footnote very cumbersome to use.",
+    "I felt very confident using Footnote.",
+    "I needed to learn a lot of things before I could get going with Footnote."
+  ];
+
+  for (var i = 0; i < susStatements.length; i++) {
+    form.addScaleItem()
+      .setTitle(susStatements[i])
+      .setBounds(1, 5)
+      .setLabels("Strongly Disagree", "Strongly Agree")
+      .setRequired(true);
+  }
+
+  // --- Section 3: Feature ratings ---
+  form.addSectionHeaderItem()
+    .setTitle("Feature Usefulness")
+    .setHelpText("Rate each feature on how useful it was to you. 1 = Not useful at all, 5 = Extremely useful. Skip any you didn't use.");
+
+  var features = [
+    "Executive Summary",
+    "Key Findings with confidence ratings (low / medium / high)",
+    "Citation Knowledge Graph (the interactive node diagram)",
+    "Papers List (with DOI links and citation counts)",
+    "Narrative Literature Review",
+    "Methodology Comparison Table",
+    "Research Gaps panel",
+    "Top Researchers panel",
+    "Suggested Follow-up Queries",
+    "Export to Word (.docx)"
+  ];
+
+  for (var j = 0; j < features.length; j++) {
+    form.addScaleItem()
+      .setTitle(features[j])
+      .setBounds(1, 5)
+      .setLabels("Not useful", "Extremely useful")
+      .setRequired(false);
+  }
+
+  // --- Section 4: Quality & Trust ---
+  form.addSectionHeaderItem()
+    .setTitle("Quality & Trust");
+
+  form.addMultipleChoiceItem()
+    .setTitle("Did you notice any information that seemed incorrect, hallucinated, or fabricated?")
+    .setChoiceValues(["Yes", "No", "I'm not sure — I didn't verify everything"])
+    .setRequired(true);
+
+  form.addParagraphTextItem()
+    .setTitle("If yes — what did you notice? (optional)")
+    .setHelpText("Even a rough description helps: e.g. 'wrong year on a paper', 'summary didn't match abstract'")
+    .setRequired(false);
+
+  form.addMultipleChoiceItem()
+    .setTitle("How much do you trust the key findings Footnote produced?")
+    .setChoiceValues([
+      "High trust — I'd use these directly in my work",
+      "Moderate trust — I'd use them as a starting point and verify",
+      "Low trust — I'd verify everything before relying on them",
+      "No trust — I wouldn't rely on any of it"
+    ])
+    .setRequired(true);
+
+  // --- Section 5: Comparison ---
+  form.addSectionHeaderItem()
+    .setTitle("Compared to Your Usual Approach");
+
+  form.addMultipleChoiceItem()
+    .setTitle("Compared to your usual literature review method, Footnote felt:")
+    .setChoiceValues([
+      "Much faster",
+      "Somewhat faster",
+      "About the same speed",
+      "Slower"
+    ])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Compared to your usual method, the information you got from Footnote was:")
+    .setChoiceValues([
+      "More comprehensive",
+      "About the same breadth",
+      "Less comprehensive",
+      "Hard to compare"
+    ])
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Would you use Footnote in your actual research going forward?")
+    .setChoiceValues([
+      "Definitely yes",
+      "Probably yes",
+      "Unsure",
+      "Probably not",
+      "Definitely not"
+    ])
+    .setRequired(true);
+
+  // --- Section 6: Open feedback ---
+  form.addSectionHeaderItem()
+    .setTitle("Open Feedback")
+    .setHelpText("This section matters most — your words go directly to the developer.");
+
+  form.addParagraphTextItem()
+    .setTitle("What was the single most valuable thing about Footnote?")
+    .setRequired(true);
+
+  form.addParagraphTextItem()
+    .setTitle("What was the biggest problem or limitation you ran into?")
+    .setRequired(true);
+
+  form.addParagraphTextItem()
+    .setTitle("If you could add or change one thing, what would it be?")
+    .setRequired(false);
+
+  form.addScaleItem()
+    .setTitle("Overall rating of Footnote")
+    .setBounds(1, 5)
+    .setLabels("Very poor", "Excellent")
+    .setRequired(true);
+
+  form.addMultipleChoiceItem()
+    .setTitle("Would you recommend Footnote to a fellow PhD student?")
+    .setChoiceValues(["Definitely", "Probably", "Not sure", "Probably not"])
+    .setRequired(true);
+
+  form.addTextItem()
+    .setTitle("Your name (optional — only if you're happy to be quoted anonymously in research)")
+    .setRequired(false);
+
+  return form.getPublishedUrl();
+}
