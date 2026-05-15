@@ -1,0 +1,11 @@
+participant_id,role,discipline,experience_years,searches_per_week,fn_time_min,gs_time_min,fn_sus,gs_sus,fn_coverage,gs_coverage,fn_accuracy,gs_accuracy,fn_pu_mean,gs_pu_mean,fn_peou_mean,gs_peou_mean,fn_atu_mean,gs_atu_mean,fn_bi_mean,gs_bi_mean
+P01,PhD Student,Computer Science,3,10+,3.8,14.0,82.5,52.5,8,6,7,7,6.50,3.75,6.00,4.75,6.50,4.00,7.00,3.00
+P02,PhD Student,Biology,2,5-9,5.1,17.0,80.0,47.5,7,5,8,7,6.25,4.25,6.25,5.00,6.25,4.00,6.50,3.50
+P03,PhD Student,Cognitive Science,4,10+,2.5,12.5,95.0,65.0,9,7,7,8,7.00,3.50,6.75,4.50,7.00,3.75,7.00,3.00
+P04,PhD Student,Economics,2,5-9,4.5,30.0,85.0,55.0,8,5,7,6,6.25,3.75,5.75,4.75,6.00,3.75,6.00,3.00
+P05,Postdoctoral Researcher,Computer Science,5,10+,4.0,16.0,87.5,57.5,8,6,8,8,7.00,3.75,6.50,5.00,6.75,3.75,7.00,3.00
+P06,Postdoctoral Researcher,Biology,4,5-9,6.8,22.0,72.5,42.5,7,5,7,7,5.50,3.50,5.50,4.75,5.25,3.50,6.00,3.00
+P07,Postdoctoral Researcher,Materials Science,3,5-9,4.2,30.0,87.5,50.0,8,6,7,6,6.75,3.75,6.25,5.00,6.25,3.75,6.00,3.00
+P08,Assistant Professor,Computer Science,8,10+,3.2,15.5,90.0,62.5,9,7,8,8,7.00,4.00,6.75,5.25,7.00,4.00,7.00,3.50
+P09,Assistant Professor,Cognitive Science,7,10+,3.0,11.2,85.0,60.0,8,7,7,8,6.75,4.00,6.25,4.75,6.50,4.00,6.50,3.00
+P10,Industry Research Scientist,Computer Science,6,10+,5.8,18.5,77.5,37.5,7,4,8,7,6.25,3.75,6.00,5.00,6.00,3.75,6.00,3.00
